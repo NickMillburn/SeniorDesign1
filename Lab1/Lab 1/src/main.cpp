@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include "WiFiS3.h"
+#include "network_credentials.h"
 
 // put function declarations here:
 int myFunction(int, int);
