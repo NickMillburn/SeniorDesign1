@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "WiFiS3.h"
 #include "network_credentials.h"
+#include "display.h"
 
 // put function declarations here:
 int myFunction(int, int);
@@ -8,9 +9,17 @@ int myFunction(int, int);
 void setup() {
   // put your setup code here, to run once:
   int result = myFunction(2, 3);
+  Serial.begin(115200); // setting baud
+  delay(500);
+
+  display_init(); 
+  display_show_default();
+
+  Serial.println("Boot complete.");
 }
 
 void loop() {
+  delay(1000);
   // put your main code here, to run repeatedly:
 }
 
