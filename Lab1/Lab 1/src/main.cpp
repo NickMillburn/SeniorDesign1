@@ -1,29 +1,35 @@
-#include <Arduino.h>
-#include "WiFiS3.h"
-#include "network_credentials.h"
-#include "display.h"
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
-// put function declarations here:
-int myFunction(int, int);
+constexpr uint8_t PIN_A = 2;   // Sensor A DQ
+constexpr uint8_t PIN_B = 3;   // Sensor B DQ
+
+OneWire oneWireA(PIN_A);
+OneWire oneWireB(PIN_B);
+
+DallasTemperature sensorA(&oneWireA);
+DallasTemperature sensorB(&oneWireB);
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
-  Serial.begin(115200); // setting baud
-  delay(500);
+  Serial.begin(115200);
 
-  display_init(); 
-  display_show_default();
+  
+  pinMode(PIN_A, INPUT_PULLUP); 
+  pinMode(PIN_B, INPUT_PULLUP);
 
-  Serial.println("Boot complete.");
+  sensorA.begin();
+  sensorB.begin();
 }
 
 void loop() {
-  delay(1000);
-  // put your main code here, to run repeatedly:
-}
+  sensorA.requestTemperatures();
+  sensorB.requestTemperatures();
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  float tA = sensorA.getTempCByIndex(0);
+  float tB = sensorB.getTempCByIndex(0);
+
+  Serial.print("A: "); Serial.print(tA); Serial.print(" C   ");
+  Serial.print("B: "); Serial.print(tB); Serial.println(" C");
+
+  delay(1000);
 }
