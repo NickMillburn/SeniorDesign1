@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "WiFiS3.h"
 #include "network_credentials.h"
+#include "display.h"
 
 //getting wifi credientials from separate file for security purposes
 char ssid[] = SSID; // your network SSID (name)
@@ -49,6 +50,13 @@ void setup() {
   server.begin();
   printWifiStatus();
 
+  Serial.begin(115200); // setting baud
+  delay(500);
+
+  display_init(); 
+  display_show_default();
+
+  Serial.println("Boot complete.");
 }
 
 void loop() {
