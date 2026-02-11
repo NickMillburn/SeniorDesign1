@@ -4,23 +4,32 @@
 #include "WiFiS3.h"
 #include "network_credentials.h"
 #include "display.h"
+#include <RTC.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 //getting wifi credientials from separate file for security purposes
-char ssid[] = SSID; // your network SSID (name)
-char password[] = PASSWORD; // your network password (use for WPA, or use as key
+char ssid[] = PRIVATE_SSID; // your network SSID (name)
+char password[] = PRIVATE_PASSWORD; // your network password (use for WPA, or use as key
 
 int led = LED_BUILTIN;
 int status = WL_IDLE_STATUS;
 WiFiServer server(80);
 
+//creating OneWire objects for each temp sensor, using D2 and D3 as the data pins:
+OneWire tempsensorPin1(D2);
+OneWire tempsensorPin2(D3);
 
+//creating DallasTemperature objects for each temp sensor, passing in the corresponding OneWire objects:
+DallasTemperature tempsensor1(&tempsensorPin1);
+DallasTemperature tempsensor2(&tempsensorPin2);
 
 // put function declarations here:
 // function to print WiFi status to serial monitor, including the IP address of the board, network SSID, and signal strength:
 void printWifiStatus();
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200); // setting baud
   pinMode(led, OUTPUT);
 
   //check for WiFi module:
@@ -50,13 +59,13 @@ void setup() {
   server.begin();
   printWifiStatus();
 
-  Serial.begin(115200); // setting baud
-  delay(500);
+  // Serial.begin(115200); // setting baud
+  // delay(500);
 
-  display_init(); 
-  display_show_default();
+  // display_init(); 
+  // display_show_default();
 
-  Serial.println("Boot complete.");
+  // Serial.println("Boot complete.");
 }
 
 void loop() {
@@ -105,6 +114,17 @@ void loop() {
       }
       
     }
+
+    // read temperature values from each sensor:
+    tempsensor1.requestTemperatures();
+    tempsensor2.requestTemperatures();
+    float temp1 = tempsensor1.getTempCByIndex(0);
+    float temp2 = tempsensor2.getTempCByIndex(0);
+
+    Serial.print("Temp Sensor 1: ");
+    Serial.print(temp1);
+    Serial.print(" | Temp Sensor 2: ");
+    Serial.println(temp2);
     // close the connection:
     client.stop();
     Serial.println("client disconnected");
