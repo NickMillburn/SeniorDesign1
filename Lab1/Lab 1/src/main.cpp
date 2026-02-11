@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 // Based on "Simple webserver example from https://docs.arduino.cc/tutorials/uno-r4-wifi/wifi-examples/"
 
 #include <Arduino.h>
@@ -177,6 +178,35 @@ void loop() {
   sensorA.requestTemperatures();
   sensorB.requestTemperatures();
 
+=======
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+constexpr uint8_t PIN_A = 2;   // Sensor A DQ
+constexpr uint8_t PIN_B = 3;   // Sensor B DQ
+
+OneWire oneWireA(PIN_A);
+OneWire oneWireB(PIN_B);
+
+DallasTemperature sensorA(&oneWireA);
+DallasTemperature sensorB(&oneWireB);
+
+void setup() {
+  Serial.begin(115200);
+
+  
+  pinMode(PIN_A, INPUT_PULLUP); 
+  pinMode(PIN_B, INPUT_PULLUP);
+
+  sensorA.begin();
+  sensorB.begin();
+}
+
+void loop() {
+  sensorA.requestTemperatures();
+  sensorB.requestTemperatures();
+
+>>>>>>> 42d634d83717d1e0e906d1f00abfdc7a64fc3a7d
   float tA = sensorA.getTempCByIndex(0);
   float tB = sensorB.getTempCByIndex(0);
 
@@ -185,4 +215,7 @@ void loop() {
 
   delay(1000);
 }
+<<<<<<< HEAD
 >>>>>>> 42d634d (Temperature sensing working for device is working now.)
+=======
+>>>>>>> 42d634d83717d1e0e906d1f00abfdc7a64fc3a7d
