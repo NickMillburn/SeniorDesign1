@@ -1,11 +1,33 @@
-/*int TempInput1 = 2;
-int TempInput2 = 3;
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include "sensors.h"
 
-void loop() 
-{
+#define SENSOR_COUNT 2
 
-  int sensorVal1 = digitalRead(TempInput1);
-  int sensorVal2 = digitalRead(TempInput2); // Reads the value from the specified input pin
-  // Use sensorVal in your logic
+static OneWire oneWire0(D2);
+static OneWire oneWire1(D3);
+
+static DallasTemperature sensor0(&oneWire0);
+static DallasTemperature sensor1(&oneWire1);
+
+static DallasTemperature* sensors[SENSOR_COUNT] = { &sensor0, &sensor1 };
+
+void sensors_init() {
+    sensor0.begin();
+    sensor1.begin();
 }
-  */
+
+void sensors_update() {
+    sensor0.requestTemperatures();
+    sensor1.requestTemperatures();
+}
+
+float sensors_getTempC(int sensor) {
+    if (sensor < 0 || sensor >= SENSOR_COUNT) return DEVICE_DISCONNECTED_C;
+    return sensors[sensor]->getTempCByIndex(0);
+}
+
+float sensors_getTempF(int sensor) {
+    if (sensor < 0 || sensor >= SENSOR_COUNT) return DEVICE_DISCONNECTED_F;
+    return sensors[sensor]->getTempFByIndex(0);
+}
