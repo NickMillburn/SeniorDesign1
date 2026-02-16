@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include "WiFiS3.h"
-#include "network_credentials.h"
+#include "network_credentials.h" // include the header file with wifi credentials
 #include "display.h"
 #include "sensors.h"
 #include <RTC.h>
