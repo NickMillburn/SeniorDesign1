@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include "WiFiS3.h"
-#include "network_credentials.h"
+#include "network_credentials.h" // include the header file with wifi credentials
 #include "display.h"
 #include <RTC.h>
 #include <OneWire.h>
@@ -59,11 +59,9 @@ void setup() {
   server.begin();
   printWifiStatus();
 
-  // Serial.begin(115200); // setting baud
-  // delay(500);
-
-  // display_init(); 
-  // display_show_default();
+  //Display logic
+  display_init(); 
+  display_show_default();
 
   // Serial.println("Boot complete.");
 }
@@ -123,8 +121,10 @@ void loop() {
 
     Serial.print("Temp Sensor 1: ");
     Serial.print(temp1);
+    Serial.print("ºC");
     Serial.print(" | Temp Sensor 2: ");
-    Serial.println(temp2);
+    Serial.print(temp2);
+    Serial.println("ºC");
     // close the connection:
     client.stop();
     Serial.println("client disconnected");

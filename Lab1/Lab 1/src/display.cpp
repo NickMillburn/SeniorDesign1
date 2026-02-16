@@ -20,3 +20,23 @@ void display_show_default() {
   u8g2.drawStr(x, y, text);
   u8g2.sendBuffer();
 }
+
+// Function to display temperature readings from two sensors on the OLED display
+//UNTESTED
+void display_show_temperature(float temp1, float temp2) {
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_logisoso32_tf);
+
+  char tempStr[32];
+  snprintf(tempStr, sizeof(tempStr), "T1: %.1fC", temp1);
+  int16_t x1 = (128 - u8g2.getStrWidth(tempStr)) / 2;
+  int16_t y1 = 30;
+
+  snprintf(tempStr, sizeof(tempStr), "T2: %.1fC", temp2);
+  int16_t x2 = (128 - u8g2.getStrWidth(tempStr)) / 2;
+  int16_t y2 = 60;
+
+  u8g2.drawStr(x1, y1, tempStr);
+  u8g2.drawStr(x2, y2, tempStr);
+  u8g2.sendBuffer();
+}
