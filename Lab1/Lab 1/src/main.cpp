@@ -4,9 +4,10 @@
 #include "WiFiS3.h"
 #include "network_credentials.h" // include the header file with wifi credentials
 #include "display.h"
+#include "sensors.h"
 #include <RTC.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
+// #include <OneWire.h>
+// #include <DallasTemperature.h>
 
 //getting wifi credientials from separate file for security purposes
 char ssid[] = PRIVATE_SSID; // your network SSID (name)
@@ -17,12 +18,12 @@ int status = WL_IDLE_STATUS;
 WiFiServer server(80);
 
 //creating OneWire objects for each temp sensor, using D2 and D3 as the data pins:
-OneWire tempsensorPin1(D2);
-OneWire tempsensorPin2(D3);
+// OneWire tempsensorPin1(D2);
+// OneWire tempsensorPin2(D3);
 
 //creating DallasTemperature objects for each temp sensor, passing in the corresponding OneWire objects:
-DallasTemperature tempsensor1(&tempsensorPin1);
-DallasTemperature tempsensor2(&tempsensorPin2);
+// DallasTemperature tempsensor1(&tempsensorPin1);
+// DallasTemperature tempsensor2(&tempsensorPin2);
 
 // put function declarations here:
 // function to print WiFi status to serial monitor, including the IP address of the board, network SSID, and signal strength:
@@ -59,11 +60,14 @@ void setup() {
   server.begin();
   printWifiStatus();
 
-  //Display logic
-  display_init(); 
-  display_show_default();
+  // Serial.begin(115200); // setting baud
+  // delay(500);
 
-  // Serial.println("Boot complete.");
+  display_init();
+  sensors_init();
+  // display_show_default();
+
+  Serial.println("Boot complete.");
 }
 
 void loop() {
@@ -94,7 +98,7 @@ void loop() {
             // The HTTP response ends with another blank line:
             client.println();
             // break out of the while loop:
-            break;
+            break; //Still not displaying anything
           } else {    // if you got a newline, then clear currentLine:
             currentLine = "";
           }
@@ -114,21 +118,29 @@ void loop() {
     }
 
     // read temperature values from each sensor:
-    tempsensor1.requestTemperatures();
-    tempsensor2.requestTemperatures();
-    float temp1 = tempsensor1.getTempCByIndex(0);
-    float temp2 = tempsensor2.getTempCByIndex(0);
+    // tempsensor1.requestTemperatures();
+    // tempsensor2.requestTemperatures();
+    // float temp1 = tempsensor1.getTempCByIndex(0);
+    // float temp2 = tempsensor2.getTempCByIndex(0);
 
-    Serial.print("Temp Sensor 1: ");
-    Serial.print(temp1);
-    Serial.print("ºC");
-    Serial.print(" | Temp Sensor 2: ");
-    Serial.print(temp2);
-    Serial.println("ºC");
     // close the connection:
     client.stop();
     Serial.println("client disconnected");
   }
+
+  // Update sensors and display every loop iteration
+  sensors_update();
+  float temp1 = sensors_getTempC(0);
+  float temp2 = sensors_getTempC(1);
+
+  Serial.print("Temp Sensor 1: ");
+  Serial.print(temp1);
+  Serial.print(" | Temp Sensor 2: ");
+  Serial.println(temp2);
+  // TODO: replace with actual button reads when wired
+  bool btn1 = true;
+  bool btn2 = true;
+  display_update(btn1, temp1, btn2, temp2);
 }
 
 // put function definitions here:
