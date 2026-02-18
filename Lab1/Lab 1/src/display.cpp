@@ -40,3 +40,8 @@ void display_update(bool btn1, float tempC1, bool btn2, float tempC2) {
 
   u8g2.sendBuffer();
 }
+
+void display_off() {
+  u8g2.clearBuffer();
+  u8g2.sendBuffer();
+}
