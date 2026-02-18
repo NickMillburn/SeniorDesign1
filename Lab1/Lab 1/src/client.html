@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Temperature Monitor</title>
+</head>
+<body>
+    <h1>Temperature Monitor</h1>
+<div>
+  <canvas id="myChart"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    
+</script>
+<script>
+  const ctx = document.getElementById('myChart');
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      //pull labels from json data sent from server
+      labels: [0, 1, 2, 3], // Example time labels in seconds
+      datasets: [{
+        label: 'Sensor 1',
+        data: ,
+        borderWidth: 1,
+        borderColor: 'rgb(255, 0, 0)',
+        backgroundColor: 'rgba(255, 0, 0, 0.2)'
+      },
+    {
+        label: 'Sensor 2',
+        data: [22, 24, 26, 28],
+        borderWidth: 1,
+        borderColor: 'rgb(0, 0, 255)',
+        backgroundColor: 'rgba(0, 0, 255, 0.2)'
+    }]
+    },
+    options: {
+      scales: {
+        y: {
+            min:0,
+            max:50,
+            title: {
+                display: true,
+                text: 'Temperature (°C)'
+            }
+        },
+        x: {
+            title: {
+                display: true,
+                text: 'Time (s)'
+            }
+        }
+      },
+      
+    }
+  });
+
+  //update chart every second with new data from server
+  async function updateChart() {
+    const response = await fetch('/data'); // Fetch new data from the server
+    const data = await response.json(); // Parse the JSON response
+
+    // Update the chart with the new data
+    myChart.data.labels = data.time; // Update time labels
+    myChart.data.datasets[0].data = data.sensor1; // Update sensor 1 data
+    myChart.data.datasets[1].data = data.sensor2; // Update sensor 2 data
+    myChart.update(); // Refresh the chart
+  }
+</script>
+</body>
+</html>
+ 
