@@ -7,8 +7,6 @@
 #include "sensors.h"
 #include "phys_input.h"
 #include <RTC.h>
-// #include <OneWire.h>
-// #include <DallasTemperature.h>
 
 //getting wifi credientials from separate file for security purposes
 char ssid[] = PRIVATE_SSID; // your network SSID (name)
@@ -17,14 +15,6 @@ char password[] = PRIVATE_PASSWORD; // your network password (use for WPA, or us
 int led = LED_BUILTIN;
 int status = WL_IDLE_STATUS;
 WiFiServer server(80);
-
-//creating OneWire objects for each temp sensor, using D2 and D3 as the data pins:
-// OneWire tempsensorPin1(D2);
-// OneWire tempsensorPin2(D3);
-
-//creating DallasTemperature objects for each temp sensor, passing in the corresponding OneWire objects:
-// DallasTemperature tempsensor1(&tempsensorPin1);
-// DallasTemperature tempsensor2(&tempsensorPin2);
 
 // put function declarations here:
 // function to print WiFi status to serial monitor, including the IP address of the board, network SSID, and signal strength:
@@ -45,7 +35,7 @@ void setup() {
   if (fv < WIFI_FIRMWARE_LATEST_VERSION) {
     Serial.println("Please upgrade the firmware");
   } 
-
+  
   //attempt to connect to WiFi network:
 
   while (status != WL_CONNECTED) {
@@ -61,9 +51,6 @@ void setup() {
   server.begin();
   printWifiStatus();
 
-  // Serial.begin(115200); // setting baud
-  // delay(500);
-
   display_init();
   sensors_init();
   phys_input_init();
@@ -73,7 +60,7 @@ void setup() {
 
 void loop() {
   WiFiClient client = server.available();   // listen for incoming clients
-
+  
   if (client) {                             // if you get a client,
     Serial.println("new client");           // print a message out the serial port
     String currentLine = "";                // make a String to hold incoming data from the client
@@ -117,12 +104,6 @@ void loop() {
       }
       
     }
-
-    // read temperature values from each sensor:
-    // tempsensor1.requestTemperatures();
-    // tempsensor2.requestTemperatures();
-    // float temp1 = tempsensor1.getTempCByIndex(0);
-    // float temp2 = tempsensor2.getTempCByIndex(0);
 
     // close the connection:
     client.stop();
