@@ -5,6 +5,7 @@
 #include "network_credentials.h"
 #include "display.h"
 #include "sensors.h"
+#include "phys_input.h"
 #include <RTC.h>
 // #include <OneWire.h>
 // #include <DallasTemperature.h>
@@ -65,7 +66,7 @@ void setup() {
 
   display_init();
   sensors_init();
-  // display_show_default();
+  phys_input_init();
 
   Serial.println("Boot complete.");
 }
@@ -128,7 +129,16 @@ void loop() {
     Serial.println("client disconnected");
   }
 
-  // Update sensors and display every loop iteration
+  //Physical inputs (buttons + power switch)
+  phys_input_update();
+
+  //Power switch gate: when OFF, blank display and skip everythin
+  if (!systemPowerOn) {
+    display_off();
+    return;  // no sensor reads, no display, no data served
+  }
+
+  //Update sensors and display
   sensors_update();
   float temp1 = sensors_getTempC(0);
   float temp2 = sensors_getTempC(1);
@@ -137,10 +147,8 @@ void loop() {
   Serial.print(temp1);
   Serial.print(" | Temp Sensor 2: ");
   Serial.println(temp2);
-  // TODO: replace with actual button reads when wired
-  bool btn1 = true;
-  bool btn2 = true;
-  display_update(btn1, temp1, btn2, temp2);
+
+  display_update(sensor1Active, temp1, sensor2Active, temp2);
 }
 
 // put function definitions here:
