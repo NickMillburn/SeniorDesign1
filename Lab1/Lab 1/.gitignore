@@ -4,3 +4,5 @@
 .vscode/launch.json
 .vscode/ipch
 include/network_credentials.h
+src/*.code-workspace
+.DS_Store
