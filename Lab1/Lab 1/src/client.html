@@ -12,26 +12,23 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-    
-</script>
-<script>
   const ctx = document.getElementById('myChart');
-
-  new Chart(ctx, {
+  const myChart = new Chart(ctx, {
     type: 'line',
     data: {
-      //pull labels from json data sent from server
-      labels: [0, 1, 2, 3], // Example time labels in seconds
+      labels: [0, 1, 2, 3, 4, 5], // sample indices for x-axis
       datasets: [{
         label: 'Sensor 1',
-        data: ,
+        data: [10, 20, 30, null, 15, 5], // sample data for sensor 1
+        spanGaps: false,
         borderWidth: 1,
         borderColor: 'rgb(255, 0, 0)',
         backgroundColor: 'rgba(255, 0, 0, 0.2)'
       },
     {
         label: 'Sensor 2',
-        data: [22, 24, 26, 28],
+        data: [100,90,null,null,80,70], // sample data for sensor 2
+        spanGaps: false,
         borderWidth: 1,
         borderColor: 'rgb(0, 0, 255)',
         backgroundColor: 'rgba(0, 0, 255, 0.2)'
@@ -40,8 +37,8 @@
     options: {
       scales: {
         y: {
-            min:0,
-            max:50,
+            suggestedMin: 0,
+            suggestedMax: 50,
             title: {
                 display: true,
                 text: 'Temperature (°C)'
@@ -52,6 +49,12 @@
                 display: true,
                 text: 'Time (s)'
             }
+        },
+        //null points aren't filed in
+        spanGaps: false,
+        //turn off animations
+        animation:{
+          duration:0
         }
       },
       
@@ -60,15 +63,22 @@
 
   //update chart every second with new data from server
   async function updateChart() {
+    const numPoints = 300; // number of data points to display
     const response = await fetch('/data'); // Fetch new data from the server
     const data = await response.json(); // Parse the JSON response
 
+    const sensor0 = data.sensor0 || [];
+    const sensor1 = data.sensor1 || [];
+  
     // Update the chart with the new data
-    myChart.data.labels = data.time; // Update time labels
-    myChart.data.datasets[0].data = data.sensor1; // Update sensor 1 data
-    myChart.data.datasets[1].data = data.sensor2; // Update sensor 2 data
+    // Set x-axis labels to be the indices of the data points (0 to numPoints)
+    myChart.data.labels = Array.from({ numPoints}, (_, i) => numPoints - i); 
+    myChart.data.datasets[0].data = sensor0; // Sensor on D2
+    myChart.data.datasets[1].data = sensor1; // Sensor on D3
     myChart.update(); // Refresh the chart
   }
+  updateChart();
+  setInterval(updateChart, 1000); // Update the chart every second
 </script>
 </body>
 </html>
