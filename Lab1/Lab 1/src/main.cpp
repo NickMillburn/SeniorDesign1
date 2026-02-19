@@ -7,7 +7,8 @@
 #include "sensors.h"
 #include "phys_input.h"
 #include <RTC.h>
-#include "TempServer.cpp"
+#include <math.h>
+#include "TempServer.h"
 
 //getting wifi credientials from separate file for security purposes
 char ssid[] = PRIVATE_SSID; // your network SSID (name)
@@ -16,7 +17,7 @@ char password[] = PRIVATE_PASSWORD; // your network password (use for WPA, or us
 int led = LED_BUILTIN;
 int status = WL_IDLE_STATUS;
 
-TempServer server; // Create an instance of the TempServer class to manage WiFi and server functions
+TempServer server(80); // Create an instance of the TempServer class to manage WiFi and server functions
 
 // put function declarations here:
 // function to print WiFi status to serial monitor, including the IP address of the board, network SSID, and signal strength:
@@ -24,7 +25,7 @@ void printWifiStatus();
 
 void setup() {
   Serial.begin(115200); // setting baud
-  pinMode(led, OUTPUT);
+  Serial.println("Serial ready");
 
   //check for WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
@@ -32,110 +33,87 @@ void setup() {
     // don't continue
     while (true);
   }
+  
+  Serial.println("WiFi module found");
+
 
   String fv = WiFi.firmwareVersion();
   if (fv < WIFI_FIRMWARE_LATEST_VERSION) {
     Serial.println("Please upgrade the firmware");
   } 
-
   //attempt to connect to WiFi network:
 
-  while (status != WL_CONNECTED) {
+  while (status != WL_CONNECTED ) {
     Serial.print("Attempting to connect to SSID: ");
     Serial.println(ssid);
     // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
     status = WiFi.begin(ssid, password);
 
-    // wait 10 seconds for connection:
-    delay(10000);
+    // wait 5 seconds for connection:
+    delay(5000);
   }
+
+
+  Serial.println("Connected to wifi");
+  server.begin();
+  Serial.println("TempServer started");
 
   printWifiStatus();
 
   display_init();
   sensors_init();
-<<<<<<< HEAD
-  server = TempServer(80); // Initialize the TempServer instance to listen on port 80
-=======
   phys_input_init();
->>>>>>> e1a35249f2277344c24dec204a3d17bb5b340c4a
 
   Serial.println("Boot complete.");
 }
 
 void loop() {
-  WiFiClient client = server.getClient();   // listen for incoming clients
-  
-  if (client) {                             // if you get a client,
-    Serial.println("new client");           // print a message out the serial port
-    String currentLine = "";                // make a String to hold incoming data from the client
-    while (client.connected()) {            // loop while the client's connected
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out to the serial monitor
-        if (c == '\n') {                    // if the byte is a newline character
-
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println("Connection: close");
-            client.println("Refresh: 1"); //refresh page automatically every 1 sec
-
-            client.println();
-
-            // the content of the HTTP response follows the header:
-            client.print("<p style=\"font-size:7vw;\">Click <a href=\"/H\">here</a> turn the LED on<br></p>");
-            client.print("<p style=\"font-size:7vw;\">Click <a href=\"/L\">here</a> turn the LED off<br></p>");
-            
-            // The HTTP response ends with another blank line:
-            client.println();
-            // break out of the while loop:
-            break; //Still not displaying anything
-          } else {    // if you got a newline, then clear currentLine:
-            currentLine = "";
-          }
-        } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
-        }
-
-        // Check to see if the client request was "GET /H" or "GET /L":
-        if (currentLine.endsWith("GET /H")) {
-          digitalWrite(LED_BUILTIN, HIGH);               // GET /H turns the LED on
-        }
-        if (currentLine.endsWith("GET /L")) {
-          digitalWrite(LED_BUILTIN, LOW);                // GET /L turns the LED off
-        }
-      }
-      
-    }
-
-    // close the connection:
-    client.stop();
-    Serial.println("client disconnected");
-  }
+  // Delegate all HTTP request/response handling to TempServer.
+  server.handleClientRequest();
 
   //Physical inputs (buttons + power switch)
   phys_input_update();
 
-  //Power switch gate: when OFF, blank display and skip everythin
-  if (!systemPowerOn) {
-    display_off();
-    return;  // no sensor reads, no display, no data served
+  static unsigned long lastSampleMs = 0;
+  const unsigned long sampleIntervalMs = 1000;
+  unsigned long now = millis();
+  if (now - lastSampleMs < sampleIntervalMs) {
+    if (!systemPowerOn) {
+      display_off();
+    }
+    return;
   }
+  lastSampleMs = now;
 
-  //Update sensors and display
   sensors_update();
   float temp1 = sensors_getTempC(0);
   float temp2 = sensors_getTempC(1);
+  int powerRaw = digitalRead(PIN_POWER_SW);
 
-  Serial.print("Temp Sensor 1: ");
+  Serial.print("DBG powerRaw=");
+  Serial.print(powerRaw);
+  Serial.print(" systemPowerOn=");
+  Serial.print(systemPowerOn ? "ON" : "OFF");
+  Serial.print(" sensor1Active=");
+  Serial.print(sensor1Active ? "ON" : "OFF");
+  Serial.print(" sensor2Active=");
+  Serial.print(sensor2Active ? "ON" : "OFF");
+  Serial.print(" | Temp1=");
   Serial.print(temp1);
-  Serial.print(" | Temp Sensor 2: ");
-  Serial.println(temp2);
+  Serial.print("C Temp2=");
+  Serial.print(temp2);
+  Serial.println("C");
+
+  if (!systemPowerOn) {
+    display_off();
+    // Preserve timeline while powered off so graph shows a gap.
+    server.writeSensorData(0, NAN);
+    server.writeSensorData(1, NAN);
+    return;
+  }
+
+  server.writeSensorData(0, temp1);
+  server.writeSensorData(1, temp2);
 
   display_update(sensor1Active, temp1, sensor2Active, temp2);
 }
@@ -150,10 +128,5 @@ void printWifiStatus() {
   IPAddress ip = WiFi.localIP();
   Serial.print("IP Address: ");
   Serial.println(ip);
-
-  // print the received signal strength:
-  long rssi = WiFi.RSSI();
-  Serial.print("signal strength (RSSI):");
-  Serial.print(rssi);
-  Serial.println(" dBm");
 }
+
