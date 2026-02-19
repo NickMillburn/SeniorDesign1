@@ -1,110 +1,74 @@
-#include <WiFiS3.h>
-#include "display.h"
-#include "sensors.h"
-#include <vector>
-#include <map>
+#include "TempServer.h"
+#include <math.h>
 
-using namespace std;
+// Constructor to initialize the TempServer with a specific port for the WiFiServer, and basic setup for sensor data storage
+TempServer::TempServer(int port) : server(port) {
+    sensorData[0] = std::vector<float>();
+    sensorData[1] = std::vector<float>();
+}
 
-//TempServer class to handle all wifi and server related functions, including handling client requests and responses, and managing the server lifecycle
-class TempServer {
-    public:
-    //inintialize the server and set up any necessary data structures
-    TempServer(int port) : server(port) {
-        sensorData[0] = vector<float>();
-        sensorData[1] = vector<float>();
-        server.begin();
-        Serial.println("Server started");
+// Starts the server; I was getting some weird client connection issues when I had the server start in the TempServer constructor, 
+// so I moved it to a separate begin() function that is called after WiFi connection is established in main.cpp
+void TempServer::begin() {
+    server.begin();
+}
+
+// Retrieves the latest temperature readings for a given sensor ID. If the sensor ID does not exist, it returns an empty vector.
+std::vector<float> TempServer::getSensorData(int sensorId) {
+    if (sensorData.find(sensorId) != sensorData.end()) {
+        return sensorData[sensorId];
     }
+    return std::vector<float>();
+}
 
-    //function to retrieve list of temperature readings for a given sensor ID (0 or 1)
-    vector<float> getSensorData(int sensorId) {
-        if (sensorData.find(sensorId) != sensorData.end()) {
-            return sensorData[sensorId];
-        } else {
-            return vector<float>(); // return empty vector if sensor ID not found
+// Writes a new temperature reading for a specified sensor ID. It maintains only the latest 300 readings by removing the oldest entry when the limit is exceeded.
+void TempServer::writeSensorData(int sensorId, float temp) {
+    if (sensorData.find(sensorId) != sensorData.end()) {
+        if (sensorData[sensorId].size() >= 300) {
+            sensorData[sensorId].erase(sensorData[sensorId].begin());
         }
-    }   
-
-    //function to write the latest temperature reading for a given sensor ID (0 or 1) to the server's data structure, which can be retrieved by clients when they make requests
-    //Also ensures that temperature readings are sequential, and only the latest 300 readings are stored for each sensor
-    void writeSensorData(int sensorId, float temp) {
-        if (sensorData.find(sensorId) != sensorData.end()) {
-            // Ensure that we only store the latest 300 readings for each sensor
-            if (sensorData[sensorId].size() >= 300) {
-                sensorData[sensorId].erase(sensorData[sensorId].begin()); // remove the oldest reading to maintain a maximum of 300 readings
-            }
-
-            sensorData[sensorId].push_back(temp);
-        }
+        sensorData[sensorId].push_back(temp);
     }
+}
 
-    //function to handle incoming client requests, parse the request, and send appropriate responses based on the request type and URL
-    void handleClientRequest() {
-        WiFiClient client = server.available();   // listen for incoming clients
-        if ((client)) {                             // if you get a client,
-            Serial.println("new client");           // print a message out the serial port
-            String currentLine = "";                // make a String to hold incoming data from the client
-            while (client.connected()) {            // loop while the client's connected
-                if (client.available()) {             // if there's bytes to read from the client,
-                    char c = client.read();             // read a byte, then
-                    Serial.write(c);                    // print it out to the serial monitor
-                    if (c == '\n') {                    // if the byte is a newline character
-
-                    // if the current line is blank, you got two newline characters in a row.
-                    // that's the end of the client HTTP request, so send a response:
+//Handles client requests by checking for available clients, reading their requests, and sending appropriate responses (HTML page or JSON data) based on the request type.
+void TempServer::handleClientRequest() {
+    WiFiClient client = server.available();
+    if (client) {
+        String currentLine = "";
+        String requestLine = "";
+        while (client.connected()) {
+            if (client.available()) {
+                char c = client.read();
+                if (c == '\n') {
                     if (currentLine.length() == 0) {
-                        // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-                        // and a content-type so the client knows what's coming, then a blank line:
-                        client.println("HTTP/1.1 200 OK");
-                        client.println("Content-type:text/html");
-                        client.println();
-
-                        // the content of the HTTP response follows the header:
-                        client.print("<p style=\"font-size:7vw;\">Click <a href=\"/H\">here</a> turn the LED on<br></p>");
-                        client.print("<p style=\"font-size:7vw;\">Click <a href=\"/L\">here</a> turn the LED off<br></p>");
-                        
-                        // The HTTP response ends with another blank line:
-                        client.println();
-                        // break out of the while loop:
-                        break; //Still not displaying anything
-                    } else {    // if you got a newline, then clear currentLine:
-                        currentLine = "";
+                        if (requestLine.startsWith("GET /data ")) {
+                            sendData(client);
+                        } else {
+                            sendHTML(client);
+                        }
+                        break;
                     }
-                    } else if (c != '\r') {  // if you got anything else but a carriage return character,
-                    currentLine += c;      // add it to the end of the currentLine
+                    if (requestLine.length() == 0) {
+                        requestLine = currentLine;
                     }
-
-                    // Check to see if the client request was "GET /H" or "GET /L":
-                    if (currentLine.endsWith("GET /H")) {
-                    digitalWrite(LED_BUILTIN, HIGH);               // GET /H turns the LED on
-                    }
-                    if (currentLine.endsWith("GET /L")) {
-                    digitalWrite(LED_BUILTIN, LOW);                // GET /L turns the LED off
-                    }
+                    currentLine = "";
+                } else if (c != '\r') {
+                    currentLine += c;
                 }
-            
             }
-
-            // close the connection:
-            client.stop();
-            Serial.println("client disconnected");
         }
+        client.stop();
     }
-    //function to return access client information
-    WiFiClient getClient() {
-        return server.available();
-    }
+}
 
-    //funciton to send HTML outline to client
-    void sendHTML(WiFiClient& client) {
-        client.println("HTTP/1.1 200 OK");
-        client.println("Content-type:text/html");
-        client.println("Connection: close");
-        client.println();
+void TempServer::sendHTML(WiFiClient& client) {
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-type:text/html");
+    client.println("Connection: close");
+    client.println();
 
-        // The html response to set the webpage content. 
-        client.println(R"HTML(
+    client.println(R"HTML(
 <!DOCTYPE html>
 <html>
 <head>
@@ -112,44 +76,122 @@ class TempServer {
 </head>
 <body>
     <h1>Temperature Monitor</h1>
-    <p style="font-size:7vw;">Current Temp: </a> <br></p>
-    <p style="font-size:7vw;">Click <a href="/L">here</a><br></p>
-</body>
-</html>)HTML");
-    }
+<div>
+  <canvas id="myChart"></canvas>
+</div>
 
-    //sends last 300 temperature readings for each sensor to client in a JSON to be parsed and displayed using Chart.js on the client side
-    void sendData(WiFiClient& client){
-        client.println("HTTP/1.1 200 OK");
-        client.println("Content-type:application/json");
-        client.println("Connection: close");
-        client.println();
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-        // Construct JSON response with sensor data
-        String jsonResponse = "{";
-        for (const auto& entry : sensorData) {
-            int sensorId = entry.first;
-            const vector<float>& readings = entry.second;
-
-            jsonResponse += "\"sensor" + String(sensorId) + "\":[";
-            for (size_t i = 0; i < readings.size(); ++i) {
-                jsonResponse += String(readings[i], 1); // Convert float to string with 1 decimal place
-                if (i < readings.size() - 1) {
-                    jsonResponse += ",";
-                }
+<script>
+  const ctx = document.getElementById('myChart');
+  const myChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [0, 1, 2, 3, 4, 5], // sample indices for x-axis
+      datasets: [{
+        label: 'Sensor 1',
+        data: [10, 20, 30, null, 15, 5], // sample data for sensor 1
+        spanGaps: false,
+        borderWidth: 1,
+        borderColor: 'rgb(255, 0, 0)',
+        backgroundColor: 'rgba(255, 0, 0, 0.2)'
+      },
+    {
+        label: 'Sensor 2',
+        data: [100,90,null,null,80,70], // sample data for sensor 2
+        spanGaps: false,
+        borderWidth: 1,
+        borderColor: 'rgb(0, 0, 255)',
+        backgroundColor: 'rgba(0, 0, 255, 0.2)'
+    }]
+    },
+    options: {
+      scales: {
+        y: {
+            suggestedMin: 0,
+            suggestedMax: 50,
+            title: {
+                display: true,
+                text: 'Temperature (°C)'
             }
-            jsonResponse += "]";
+        },
+        x: {
+            title: {
+                display: true,
+                text: 'Time (s)'
+            }
+        },
+        //null points aren't filed in
+        spanGaps: false,
+        //turn off animations
+        animation:{
+          duration:0
         }
-        jsonResponse += "}";
+      },
+      
+    }
+  });
 
-        client.println(jsonResponse);
+  //update chart every second with new data from server
+  async function updateChart() {
+    const numPoints = 300; // number of data points to display
+    const response = await fetch('/data'); // Fetch new data from the server
+    const data = await response.json(); // Parse the JSON response
+
+    const sensor0 = data.sensor0 || [];
+    const sensor1 = data.sensor1 || [];
+  
+    // Update the chart with the new data
+    // Set x-axis labels to be the indices of the data points (0 to numPoints)
+    myChart.data.labels = Array.from({ numPoints}, (_, i) => numPoints - i); 
+    myChart.data.datasets[0].data = sensor0; // Sensor on D2
+    myChart.data.datasets[1].data = sensor1; // Sensor on D3
+    myChart.update(); // Refresh the chart
+  }
+  updateChart();
+  setInterval(updateChart, 1000); // Update the chart every second
+</script>
+</body>
+</html>
+ 
+)HTML");
+}
+
+void TempServer::sendData(WiFiClient& client) {
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-type:application/json");
+    client.println("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+    client.println("Pragma: no-cache");
+    client.println("Expires: 0");
+    client.println("Connection: close");
+    client.println();
+
+    String jsonResponse = "{";
+    bool firstSensor = true;
+
+    for (const auto& entry : sensorData) {
+        if (!firstSensor) {
+            jsonResponse += ",";
+        }
+        firstSensor = false;
+
+        int sensorId = entry.first;
+        const std::vector<float>& readings = entry.second;
+
+        jsonResponse += "\"sensor" + String(sensorId) + "\":[";
+        for (size_t i = 0; i < readings.size(); ++i) {
+            if (isnan(readings[i])) {
+                jsonResponse += "null";
+            } else {
+                jsonResponse += String(readings[i], 1);
+            }
+            if (i < readings.size() - 1) {
+                jsonResponse += ",";
+            }
+        }
+        jsonResponse += "]";
     }
 
-    // default destructor is fine; server cleaned up by WiFi stack
-    ~TempServer() = default;
-
-    private:
-    //member variable to store sensor data from each sensor, mapped by sensor ID (0 or 1) to a vector of temperature readings
-    std::map<int, std::vector<float> > sensorData;
-    WiFiServer server;
-}; 
+    jsonResponse += "}";
+    client.println(jsonResponse);
+}
