@@ -3,8 +3,8 @@
 
 // Constructor to initialize the TempServer with a specific port for the WiFiServer, and basic setup for sensor data storage
 TempServer::TempServer(int port) : server(port) {
-    sensorData[0] = std::vector<float>();
-    sensorData[1] = std::vector<float>();
+    sensorData[0] = std::vector<float>(MAX_READINGS, NAN); // Initialize sensor 0 data vector with MAX_READINGS NAN values
+    sensorData[1] = std::vector<float>(MAX_READINGS, NAN); // Initialize sensor 1 data vector with MAX_READINGS NAN values
 }
 
 // Starts the server; I was getting some weird client connection issues when I had the server start in the TempServer constructor, 
@@ -21,12 +21,13 @@ std::vector<float> TempServer::getSensorData(int sensorId) {
     return std::vector<float>();
 }
 
-// Writes a new temperature reading for a specified sensor ID. It maintains only the latest 300 readings by removing the oldest entry when the limit is exceeded.
+// Writes a new temperature reading for a specified sensor ID. It maintains only the latest (MAX_READINGS) 
+// readings by removing the oldest entry when the limit is exceeded.
 void TempServer::writeSensorData(int sensorId, float temp) {
     if (sensorData.find(sensorId) != sensorData.end()) {
-        if (sensorData[sensorId].size() >= 300) {
-            sensorData[sensorId].erase(sensorData[sensorId].begin());
-        }
+        //erase the oldest reading
+        sensorData[sensorId].erase(sensorData[sensorId].begin());
+        //add the new reading to the highest index in the vector
         sensorData[sensorId].push_back(temp);
     }
 }

@@ -7,6 +7,7 @@
 
 class TempServer {
   public:
+    static const int MAX_READINGS = 300; // Maximum number of readings to store per sensor
     explicit TempServer(int port);
 
     // Start accepting connections after WiFi is connected.
