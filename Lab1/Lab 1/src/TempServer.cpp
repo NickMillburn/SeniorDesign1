@@ -31,17 +31,22 @@ void TempServer::writeSensorData(int sensorId, float temp) {
     }
 }
 
-//Handles client requests by checking for available clients, reading their requests, and sending appropriate responses (HTML page or JSON data) based on the request type.
+//Handles client requests by checking for available clients, reading their requests, and sending appropriate responses 
+//(HTML page or JSON data) based on the request type.
 void TempServer::handleClientRequest() {
     WiFiClient client = server.available();
+    // Only process the request if a client is connected
     if (client) {
         String currentLine = "";
         String requestLine = "";
+
         while (client.connected()) {
             if (client.available()) {
                 char c = client.read();
                 if (c == '\n') {
+                    // If the current line is blank, it means we've reached the end of the HTTP request headers
                     if (currentLine.length() == 0) {
+                        // Check the request line to determine if the client is requesting the HTML page or the data endpoint
                         if (requestLine.startsWith("GET /data ")) {
                             sendData(client);
                         } else {
@@ -49,10 +54,12 @@ void TempServer::handleClientRequest() {
                         }
                         break;
                     }
+                    // Store the first line of the request (the request line) for later processing
                     if (requestLine.length() == 0) {
                         requestLine = currentLine;
                     }
                     currentLine = "";
+                    // If the line is blank, we have reached the end of the request headers, so we can break out of the loop
                 } else if (c != '\r') {
                     currentLine += c;
                 }
@@ -61,7 +68,9 @@ void TempServer::handleClientRequest() {
         client.stop();
     }
 }
-
+// Helper function to send an HTML page with embedded JavaScript for charting the temperature data. 
+// This function constructs a basic HTTP response and serves a simple webpage that uses Chart.js to 
+// visualize the temperature readings from the sensors. The html is stored in client.html, and copied here
 void TempServer::sendHTML(WiFiClient& client) {
     client.println("HTTP/1.1 200 OK");
     client.println("Content-type:text/html");
@@ -121,14 +130,13 @@ void TempServer::sendHTML(WiFiClient& client) {
                 text: 'Time (s)'
             }
         },
-        //null points aren't filed in
+      },
+       //null points aren't filed in
         spanGaps: false,
         //turn off animations
         animation:{
           duration:0
         }
-      },
-      
     }
   });
 
@@ -143,7 +151,7 @@ void TempServer::sendHTML(WiFiClient& client) {
   
     // Update the chart with the new data
     // Set x-axis labels to be the indices of the data points (0 to numPoints)
-    myChart.data.labels = Array.from({ numPoints}, (_, i) => numPoints - i); 
+    myChart.data.labels = Array.from({ length:numPoints}, (_, i) => numPoints - i); 
     myChart.data.datasets[0].data = sensor0; // Sensor on D2
     myChart.data.datasets[1].data = sensor1; // Sensor on D3
     myChart.update(); // Refresh the chart
@@ -157,7 +165,12 @@ void TempServer::sendHTML(WiFiClient& client) {
 )HTML");
 }
 
+// Helper function to send a JSON response containing the current sensor readings.
+// This function constructs an HTTP response with appropriate headers for JSON content
+// and sends a JSON object that includes the latest temperature readings for each sensor. 
 void TempServer::sendData(WiFiClient& client) {
+    //changes the HTTP response headers to indicate that we're sending JSON data, and also
+    // includes cache control headers to prevent caching of the response so client gets most up-to-date data on each request
     client.println("HTTP/1.1 200 OK");
     client.println("Content-type:application/json");
     client.println("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
@@ -166,10 +179,12 @@ void TempServer::sendData(WiFiClient& client) {
     client.println("Connection: close");
     client.println();
 
+    //building the JSON response string
     String jsonResponse = "{";
     bool firstSensor = true;
 
     for (const auto& entry : sensorData) {
+        //comma for separating sensor entries, but only if it's not the first one
         if (!firstSensor) {
             jsonResponse += ",";
         }
@@ -178,6 +193,7 @@ void TempServer::sendData(WiFiClient& client) {
         int sensorId = entry.first;
         const std::vector<float>& readings = entry.second;
 
+        //
         jsonResponse += "\"sensor" + String(sensorId) + "\":[";
         for (size_t i = 0; i < readings.size(); ++i) {
             if (isnan(readings[i])) {

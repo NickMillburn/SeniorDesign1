@@ -50,14 +50,13 @@
                 text: 'Time (s)'
             }
         },
-        //null points aren't filed in
+      },
+       //null points aren't filed in
         spanGaps: false,
         //turn off animations
         animation:{
           duration:0
         }
-      },
-      
     }
   });
 
@@ -72,7 +71,7 @@
   
     // Update the chart with the new data
     // Set x-axis labels to be the indices of the data points (0 to numPoints)
-    myChart.data.labels = Array.from({ numPoints}, (_, i) => numPoints - i); 
+    myChart.data.labels = Array.from({ length:numPoints}, (_, i) => numPoints - i); 
     myChart.data.datasets[0].data = sensor0; // Sensor on D2
     myChart.data.datasets[1].data = sensor1; // Sensor on D3
     myChart.update(); // Refresh the chart

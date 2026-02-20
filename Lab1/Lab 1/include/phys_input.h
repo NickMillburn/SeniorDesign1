@@ -2,8 +2,8 @@
 #include <Arduino.h>
 
 //Pin assignments
-#define PIN_BUTTON1  D4   // Pushbutton 1 controls Sensor 1 display
-#define PIN_BUTTON2  D5   // Pushbutton 2 controls Sensor 2 display
+#define PIN_BUTTON1  A3  // Pushbutton 1 controls Sensor 1 display
+#define PIN_BUTTON2  A2   // Pushbutton 2 controls Sensor 2 display
 #define PIN_POWER_SW D6   // Power switch system on/off
 // D7 reserved for future use
 

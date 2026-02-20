@@ -74,24 +74,20 @@ void loop() {
   //Physical inputs (buttons + power switch)
   phys_input_update();
 
-  static unsigned long lastSampleMs = 0;
-  const unsigned long sampleIntervalMs = 1000;
-  unsigned long now = millis();
-  if (now - lastSampleMs < sampleIntervalMs) {
-    if (!systemPowerOn) {
-      display_off();
-    }
+  // If system is powered off, turn off display, write NAN to sensor data
+  delay(1000); //update every second
+  if (!systemPowerOn) {
+    display_off();
+    server.writeSensorData(0, NAN);
+    server.writeSensorData(1, NAN);
     return;
   }
-  lastSampleMs = now;
-
+  
   sensors_update();
   float temp1 = sensors_getTempC(0);
   float temp2 = sensors_getTempC(1);
-  int powerRaw = digitalRead(PIN_POWER_SW);
 
-  Serial.print("DBG powerRaw=");
-  Serial.print(powerRaw);
+  //Serial output for debugging
   Serial.print(" systemPowerOn=");
   Serial.print(systemPowerOn ? "ON" : "OFF");
   Serial.print(" sensor1Active=");
@@ -104,17 +100,11 @@ void loop() {
   Serial.print(temp2);
   Serial.println("C");
 
-  if (!systemPowerOn) {
-    display_off();
-    // Preserve timeline while powered off so graph shows a gap.
-    server.writeSensorData(0, NAN);
-    server.writeSensorData(1, NAN);
-    return;
-  }
-
+  //write the latest sensor readings to the TempServer.
   server.writeSensorData(0, temp1);
   server.writeSensorData(1, temp2);
 
+  //update OLED
   display_update(sensor1Active, temp1, sensor2Active, temp2);
 }
 
