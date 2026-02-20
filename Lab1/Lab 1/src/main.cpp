@@ -80,6 +80,7 @@ void loop() {
     display_off();
     server.writeSensorData(0, NAN);
     server.writeSensorData(1, NAN);
+    Serial.println("systemPowerOn=OFF");
     return;
   }
   
@@ -88,8 +89,6 @@ void loop() {
   float temp2 = sensors_getTempC(1);
 
   //Serial output for debugging
-  Serial.print(" systemPowerOn=");
-  Serial.print(systemPowerOn ? "ON" : "OFF");
   Serial.print(" sensor1Active=");
   Serial.print(sensor1Active ? "ON" : "OFF");
   Serial.print(" sensor2Active=");
@@ -100,9 +99,18 @@ void loop() {
   Serial.print(temp2);
   Serial.println("C");
 
-  //write the latest sensor readings to the TempServer.
-  server.writeSensorData(0, temp1);
-  server.writeSensorData(1, temp2);
+  //write the latest sensor readings to the TempServer if it is on, otherwiseNAN
+  if(sensor1Active) {
+    server.writeSensorData(0, temp1);
+  } else {
+    server.writeSensorData(0, NAN);
+  }
+
+  if(sensor2Active) {
+    server.writeSensorData(1, temp2);
+  } else {
+    server.writeSensorData(1, NAN);
+  }
 
   //update OLED
   display_update(sensor1Active, temp1, sensor2Active, temp2);
