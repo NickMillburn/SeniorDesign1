@@ -75,7 +75,6 @@ void loop() {
   phys_input_update();
 
   // If system is powered off, turn off display, write NAN to sensor data
-  delay(1000); //update every second
   if (!systemPowerOn) {
     display_off();
     server.writeSensorData(0, NAN);
