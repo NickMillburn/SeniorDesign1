@@ -3,6 +3,10 @@
 #include "sensors.h"
 
 #define SENSOR_COUNT 2
+#define CONVERSION_DELAY_MS 1000  // 1 reading per second
+
+static unsigned long lastRequestTime = 0;
+static bool conversionPending = false;
 
 static OneWire oneWire0(D2);
 static OneWire oneWire1(D3);
@@ -15,11 +19,31 @@ static DallasTemperature* sensors[SENSOR_COUNT] = { &sensor0, &sensor1 };
 void sensors_init() {
     sensor0.begin();
     sensor1.begin();
+
+    sensor0.setWaitForConversion(false);
+    sensor1.setWaitForConversion(false);
+
+    sensor0.requestTemperatures();
+    sensor1.requestTemperatures();
+    lastRequestTime = millis();
+    conversionPending = true;
 }
 
 void sensors_update() {
-    sensor0.requestTemperatures();
-    sensor1.requestTemperatures();
+    unsigned long now = millis();
+
+    if (conversionPending) {
+        if ((now - lastRequestTime) >= CONVERSION_DELAY_MS) {
+            conversionPending = false;
+        }
+    }
+
+    if (!conversionPending) {
+        sensor0.requestTemperatures();
+        sensor1.requestTemperatures();
+        lastRequestTime = now;
+        conversionPending = true;
+    }
 }
 
 float sensors_getTempC(int sensor) {
