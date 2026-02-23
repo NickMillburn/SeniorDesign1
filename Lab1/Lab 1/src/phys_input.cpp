@@ -20,10 +20,11 @@ void phys_input_init() {
     // All inputs use internal pull-ups; buttons/switch connect to GND when active
     pinMode(PIN_BUTTON1,  INPUT_PULLUP);
     pinMode(PIN_BUTTON2,  INPUT_PULLUP);
-    pinMode(PIN_POWER_SW, INPUT_PULLUP);
+    pinMode(PIN_POWER_ON,  INPUT_PULLUP);
+    pinMode(PIN_POWER_OFF, INPUT_PULLUP);
 
     // Read initial power switch position
-    systemPowerOn = (digitalRead(PIN_POWER_SW) == LOW);  // active-low
+    systemPowerOn = (digitalRead(PIN_POWER_ON) == LOW);  // active-low
 }
 
 // Helper: debounce a momentary pushbutton and toggle a flag on press
@@ -58,15 +59,21 @@ static void debounce_toggle(uint8_t pin,
 }
 
 void phys_input_update() {
-    // Power switch (latching, no debounce)
-    bool powerReading = (digitalRead(PIN_POWER_SW) == LOW);  // active-low
+    // Power switch: only change state when a pin is actively LOW
+    bool onReading  = (digitalRead(PIN_POWER_ON)  == LOW);
+    bool offReading = (digitalRead(PIN_POWER_OFF) == LOW);
 
-    // Detect OFF→ON transition: reset toggle states so user starts clean
-    if (powerReading && !systemPowerOn) {
-        sensor1Active = false;
-        sensor2Active = false;
+    if (onReading) {
+        // Detect OFF→ON transition: reset toggle states so user starts clean
+        if (!systemPowerOn) {
+            sensor1Active = false;
+            sensor2Active = false;
+        }
+        systemPowerOn = true;
+    } else if (offReading) {
+        systemPowerOn = false;
     }
-    systemPowerOn = powerReading;
+    // Middle position: neither LOW, keep previous state
 
     // Only process buttons when the system is powered on
     if (!systemPowerOn) return;

@@ -4,8 +4,8 @@
 //Pin assignments
 #define PIN_BUTTON1  A3  // Pushbutton 1 controls Sensor 1 display
 #define PIN_BUTTON2  A2   // Pushbutton 2 controls Sensor 2 display
-#define PIN_POWER_SW D6   // Power switch system on/off
-// D7 reserved for future use
+#define PIN_POWER_ON  D9   // Power switch ON position
+#define PIN_POWER_OFF D10  // Power switch OFF position
 
 // Global state flags
 // Toggle states for each sensor's display (true = show temp, false = show "off").
