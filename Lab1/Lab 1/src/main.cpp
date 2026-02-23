@@ -16,7 +16,7 @@ char password[] = PRIVATE_PASSWORD; // your network password (use for WPA, or us
 
 int led = LED_BUILTIN;
 int status = WL_IDLE_STATUS;
-
+int lastUpdated = 0; // Timestamp of the last sensor update
 
 TempServer server(80, sensor1Active, sensor2Active); // Create an instance of the TempServer class to manage WiFi and server functions
 
@@ -100,6 +100,7 @@ void loop() {
   Serial.println("C");
 
   //write the latest sensor readings to the TempServer if it is on, otherwiseNAN
+  if(millis() - lastUpdated > 1000) { // Update every second
   if(sensor1Active) {
     server.writeSensorData(0, temp1);
   } else {
@@ -111,6 +112,8 @@ void loop() {
   } else {
     server.writeSensorData(1, NAN);
   }
+  lastUpdated = millis(); // Update lastUpdated timestamp
+}
 
   //update OLED
   display_update(sensor1Active, temp1, sensor2Active, temp2);
