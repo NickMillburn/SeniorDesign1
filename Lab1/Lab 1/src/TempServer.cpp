@@ -1,12 +1,6 @@
 #include "TempServer.h"
 #include <math.h>
 
-// Constructor to initialize the TempServer with a specific port for the WiFiServer, and basic setup for sensor data storage
-TempServer::TempServer(int port) : server(port) {
-    sensorData[0] = std::vector<float>(MAX_READINGS, NAN); // Initialize sensor 0 data vector with MAX_READINGS NAN values
-    sensorData[1] = std::vector<float>(MAX_READINGS, NAN); // Initialize sensor 1 data vector with MAX_READINGS NAN values
-}
-
 // Starts the server; I was getting some weird client connection issues when I had the server start in the TempServer constructor, 
 // so I moved it to a separate begin() function that is called after WiFi connection is established in main.cpp
 void TempServer::begin() {
@@ -50,7 +44,14 @@ void TempServer::handleClientRequest() {
                         // Check the request line to determine if the client is requesting the HTML page or the data endpoint
                         if (requestLine.startsWith("GET /data ")) {
                             sendData(client);
-                        } else {
+                        } else if (requestLine.startsWith("POST /toggleSensor1")) {
+                            sensor1Active = !sensor1Active; // Toggle the state of sensor 1
+                            sendData(client); // Send updated data after toggling
+                        } else if(requestLine.startsWith("POST /toggleSensor2")) {
+                            sensor2Active = !sensor2Active; // Toggle the state of sensor 2
+                            sendData(client); // Send updated data after toggling
+                        }
+                        else {
                             sendHTML(client);
                         }
                         break;
@@ -77,7 +78,6 @@ void TempServer::sendHTML(WiFiClient& client) {
     client.println("Content-type:text/html");
     client.println("Connection: close");
     client.println();
-
     client.println(R"HTML(
 <!DOCTYPE html>
 <html>
@@ -89,6 +89,8 @@ void TempServer::sendHTML(WiFiClient& client) {
 <div>
   <canvas id="myChart"></canvas>
 </div>
+<button id="sensor1Toggle">Toggle Sensor 1</button>
+<button id="sensor2Toggle">Toggle Sensor 2</button>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -155,8 +157,18 @@ void TempServer::sendHTML(WiFiClient& client) {
     myChart.data.labels = Array.from({ length:numPoints}, (_, i) => numPoints - i); 
     myChart.data.datasets[0].data = sensor0; // Sensor on D2
     myChart.data.datasets[1].data = sensor1; // Sensor on D3
-    myChart.update(); // Refresh the chart
+    myChart.update(); // Refresh
+    //  the chart
   }
+
+  //Handle client-side button presses to turn sensors on/off
+  document.getElementById('sensor1Toggle').onclick = async () => {
+    await fetch('/toggleSensor1', { method: 'POST' }); // Send a request to toggle sensor 1
+  };
+  document.getElementById('sensor2Toggle').onclick = async () => {
+    await fetch('/toggleSensor2', { method: 'POST' }); // Send a request to toggle sensor 2
+  };
+  
   updateChart();
   setInterval(updateChart, 1000); // Update the chart every second
 </script>

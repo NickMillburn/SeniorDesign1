@@ -4,9 +4,9 @@
 #define DEBOUNCE_MS 50
 
 //Global state (declared extern in header)
-volatile bool sensor1Active = false;  // Sensor 1 toggle: off by default
-volatile bool sensor2Active = false;  // Sensor 2 toggle: off by default
-volatile bool systemPowerOn = false;  // Power switch: read at startup
+bool sensor1Active = false;  // Sensor 1 toggle: off by default
+bool sensor2Active = false;  // Sensor 2 toggle: off by default
+bool systemPowerOn = false;  // Power switch: read at startup
 
 // Internal debounce state for each pushbutton
 // We only debounce the pushbuttons (toggle on press).
@@ -31,7 +31,7 @@ void phys_input_init() {
 static void debounce_toggle(uint8_t pin,
                             bool &lastStable,
                             unsigned long &lastDebTime,
-                            volatile bool &toggleFlag)
+                            bool &toggleFlag)
 {
     bool reading = digitalRead(pin);  // LOW = pressed (active-low)
     unsigned long now = millis();

@@ -10,12 +10,12 @@
 // Global state flags
 // Toggle states for each sensor's display (true = show temp, false = show "off").
 // Readable and writable by other modules (web server, display driver, etc.).
-extern volatile bool sensor1Active;
-extern volatile bool sensor2Active;
+extern bool sensor1Active;
+extern bool sensor2Active;
 
 // Power switch state (true = system on). Read-only for other modules;
 // updated only by phys_input_update().
-extern volatile bool systemPowerOn;
+extern bool systemPowerOn;
 
 // Initialize all input pins (call once in setup)
 void phys_input_init();

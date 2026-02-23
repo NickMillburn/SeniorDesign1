@@ -8,6 +8,8 @@
 <div>
   <canvas id="myChart"></canvas>
 </div>
+<button id="sensor1Toggle">Toggle Sensor 1</button>
+<button id="sensor2Toggle">Toggle Sensor 2</button>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -74,8 +76,19 @@
     myChart.data.labels = Array.from({ length:numPoints}, (_, i) => numPoints - i); 
     myChart.data.datasets[0].data = sensor0; // Sensor on D2
     myChart.data.datasets[1].data = sensor1; // Sensor on D3
-    myChart.update(); // Refresh the chart
+    myChart.update(); // Refresh
+    //  the chart
   }
+
+  //Handle client-side button click to turn sensors on/off
+  document.getElementById('sensor1Toggle').onclick = async () => {
+    await fetch('/toggleSensor1', { method: 'POST' }); // Send a request to toggle sensor 1
+  };
+
+  document.getElementById('sensor2Toggle').onclick = async () => {
+    await fetch('/toggleSensor2', { method: 'POST' }); // Send a request to toggle sensor 2
+  };
+
   updateChart();
   setInterval(updateChart, 1000); // Update the chart every second
 </script>

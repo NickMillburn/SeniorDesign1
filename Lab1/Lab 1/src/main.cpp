@@ -17,7 +17,8 @@ char password[] = PRIVATE_PASSWORD; // your network password (use for WPA, or us
 int led = LED_BUILTIN;
 int status = WL_IDLE_STATUS;
 
-TempServer server(80); // Create an instance of the TempServer class to manage WiFi and server functions
+
+TempServer server(80, sensor1Active, sensor2Active); // Create an instance of the TempServer class to manage WiFi and server functions
 
 // put function declarations here:
 // function to print WiFi status to serial monitor, including the IP address of the board, network SSID, and signal strength:
