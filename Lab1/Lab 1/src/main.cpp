@@ -16,7 +16,8 @@ char password[] = PRIVATE_PASSWORD; // your network password (use for WPA, or us
 
 int led = LED_BUILTIN;
 int status = WL_IDLE_STATUS;
-int lastUpdated = 0; // Timestamp of the last sensor update
+int lastTempUpdate = 0; // Timestamp of the last sensor update
+int lastWifiCheck = 0; // Timestamp of the last WiFi connection check
 
 TempServer server(80, sensor1Active, sensor2Active); // Create an instance of the TempServer class to manage WiFi and server functions
 
@@ -100,20 +101,32 @@ void loop() {
   Serial.println("C");
 
   //write the latest sensor readings to the TempServer if it is on, otherwiseNAN
-  if(millis() - lastUpdated > 1000) { // Update every second
-  if(sensor1Active) {
-    server.writeSensorData(0, temp1);
-  } else {
-    server.writeSensorData(0, NAN);
+  if(millis() - lastTempUpdate > 1000) { // Update every second
+    if(sensor1Active) {
+      server.writeSensorData(0, temp1);
+    } else {
+      server.writeSensorData(0, NAN);
+    }
+
+    if(sensor2Active) {
+      server.writeSensorData(1, temp2);
+    } else {
+      server.writeSensorData(1, NAN);
+    }
+    lastTempUpdate = millis(); // Update lastUpdated timestamp
   }
 
-  if(sensor2Active) {
-    server.writeSensorData(1, temp2);
-  } else {
-    server.writeSensorData(1, NAN);
+  //Check if a wireless connection is available once every 10 seconds
+  if (WiFi.status() != WL_CONNECTED && millis() - lastWifiCheck > 10000) {
+    Serial.println("Attempting to connect to WiFi...");
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.println("\nReconnected to WiFi!");
+    printWifiStatus();
+    lastWifiCheck = millis();
   }
-  lastUpdated = millis(); // Update lastUpdated timestamp
-}
 
   //update OLED
   display_update(sensor1Active, temp1, sensor2Active, temp2);
