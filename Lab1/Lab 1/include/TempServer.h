@@ -4,6 +4,7 @@
 #include <WiFiS3.h>
 #include <map>
 #include <vector>
+#include "messageConfig.h"
 
 class TempServer {
   public:
@@ -44,6 +45,8 @@ class TempServer {
     void sendEmailAlert(String emailAddress, float temperature);
     void checkTemperatureAlerts(float sensor0Temp, bool sensor0Enabled, float sensor1Temp, bool sensor1Enabled);
 
+    const messageConfig& getmessageConfig() const { return config; }
+
     ~TempServer() = default;
 
   private:
@@ -52,10 +55,15 @@ class TempServer {
     std::map<int, std::vector<float> > sensorData;
     WiFiServer server;
     bool& sensor1Active;
-    bool& sensor2Active;
+    bool& sensor2Active; 
     bool& systemPowerOn;
     String emailAddress; // Store the email address for alerts
     float highTempThreshold; // Store the temperature threshold for alerts
     float lowTempThreshold; // Store the temperature threshold for alerts
     unsigned long lastAlertEmailMs; // Rate limit alert notifications
+    messageConfig configl
+
+    static String urlDecode(const String& src);
+
+    static String formValue(const String& body, const String& key);
 };

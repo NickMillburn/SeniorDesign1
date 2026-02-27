@@ -74,6 +74,9 @@ void TempServer::handleClientRequest() {
         int contentLength = 0;
         String requestBody = "";
 
+        String headers      = "";
+        int    contentLength = 0;
+
         while (client.connected()) {
             if (client.available()) {
                 char c = client.read();
@@ -109,7 +112,10 @@ void TempServer::handleClientRequest() {
                                 Serial.println("Warning: invalid /settings payload");
                             }
                             sendData(client);
-                        } else {
+                        } else if (requestLine.startsWith("POST /messageConfig")) {
+                            handleMessageConfig(client, body);
+                          }
+                        else {
                             sendHTML(client);
                         }
                         break;
@@ -133,6 +139,59 @@ void TempServer::handleClientRequest() {
         client.stop();
     }
 }
+
+// Parses the form POST body and saves to messageConfig
+void TempServer::handleMessageConfig(WiFiClient& client, const String& body) {
+    String recipient    = formValue(body, "recipient");
+    String subject     = formValue(body, "subject");
+    String bodyTemplate = formValue(body, "bodyTemplate");
+    String maxStr       = formValue(body, "maxThreshold");
+    String minStr       = formValue(body, "minThreshold");
+    String enabledStr   = formValue(body, "alertEnabled");
+
+    if (recipient.length()    > 0) alertConfig.recipient     = recipient;
+    if (subject.length()      > 0) alertConfig.subject       = subject;
+    if (bodyTemplate.length() > 0) alertConfig.bodyTemplate  = bodyTemplate;
+    if (maxStr.length()       > 0) alertConfig.maxThresholdC = maxStr.toFloat();
+    if (minStr.length()       > 0) alertConfig.minThresholdC = minStr.toFloat();
+    alertConfig.alertEnabled = (enabledStr == "true" || enabledStr == "1" || enabledStr == "on");
+
+    Serial.println("Message config updated:");
+    Serial.print("  recipient=");    Serial.println(alertConfig.recipient);
+    Serial.print("  subject=");      Serial.println(alertConfig.subject);
+    Serial.print("  maxThreshold="); Serial.println(alertConfig.maxThresholdC);
+    Serial.print("  minThreshold="); Serial.println(alertConfig.minThresholdC);
+    Serial.print("  enabled=");      Serial.println(alertConfig.alertEnabled);
+
+    // Respond with updated JSON so the UI can confirm the saved values
+    sendData(client);
+  
+}
+
+// Decoding %XX and '+' in a URL-encoded string
+String TempServer::urlDecode(const String& src) {
+    String decoded = "";
+    for (int i = 0; i < (int)src.length(); ++i) {
+        if (src[i] == '+') {
+            decoded += ' ';
+        } else if (src[i] == '%' && i + 2 < (int)src.length()) {
+            char hi = src[i + 1];
+            char lo = src[i + 2];
+            auto hexVal = [](char c) -> int {
+                if (c >= '0' && c <= '9') return c - '0';
+                if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+                if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+                return 0;
+            };
+            decoded += (char)((hexVal(hi) << 4) | hexVal(lo));
+            i += 2;
+        } else {
+            decoded += src[i];
+        }
+    }
+    return decoded;
+}
+
 
 // Helper function to send an HTML page with embedded JavaScript for charting the temperature data.
 // This function constructs a basic HTTP response and serves a simple webpage that uses Chart.js to
@@ -319,6 +378,89 @@ void TempServer::sendHTML(WiFiClient& client) {
     renderChartFromRaw();
   }
 
+  
+  <fieldset>
+    <legend>Email Message Settings</legend>
+
+    <div class="row">
+      <label for="cfgEnabled">Messages enabled</label>
+      <input type="checkbox" id="cfgEnabled" checked>
+    </div>
+
+    <div class="row">
+      <label for="cfgRecipient">Recipient email</label>
+      <input type="email" id="cfgRecipient" size="32" placeholder="tpurcell@uiowa.edu">
+    </div>
+
+    <div class="row">
+      <label for="cfgSubject">Email subject</label>
+      <input type="text" id="cfgSubject" size="40" placeholder="Temperature Sensor Notification">
+    </div>
+
+    <div class="row" style="align-items:flex-start">
+      <label for="cfgBody" style="margin-top:4px">Email body</label>
+      <div>
+        <textarea id="cfgBody" rows="3" cols="45" placeholder="Sensor {sensor} reached {temp} deg C."></textarea>
+        <div class="hint">Use <code>{sensor}</code> for sensor number, <code>{temp}</code> for the temperature value.</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="cfgMax">Max threshold (°C)</label>
+      <input type="number" id="cfgMax" size="7" step="0.5" placeholder="50">
+      <span class="hint">Message when temp rises above this</span>
+    </div>
+
+    <div class="row">
+      <label for="cfgMin">Min threshold (°C)</label>
+      <input type="number" id="cfgMin" size="7" step="0.5" placeholder="10">
+      <span class="hint">Message when temp falls below this</span>
+    </div>
+
+    <div class="row">
+      <button id="messageSaveBtn">Save Settings</button>
+      <span id="messageSaveStatus"></span>
+    </div>
+  </fieldset>
+
+  // Populate message settings form from JSON response
+    function messageAlertConfig(cfg) {
+      if (!cfg) return;
+      document.getElementById('cfgEnabled').checked     = !!cfg.alertEnabled;
+      document.getElementById('cfgRecipient').value     = cfg.recipient    || '';
+      document.getElementById('cfgSubject').value       = cfg.subject      || '';
+      document.getElementById('cfgBody').value          = cfg.bodyTemplate || '';
+      document.getElementById('cfgMax').value           = cfg.maxThresholdC != null ? cfg.maxThresholdC : '';
+      document.getElementById('cfgMin').value           = cfg.minThresholdC != null ? cfg.minThresholdC : '';
+    }
+
+    // Save message settings 
+    document.getElementById('messageSaveBtn').onclick = async () => {
+      const params = new URLSearchParams({
+        recipient:    document.getElementById('cfgRecipient').value,
+        subject:      document.getElementById('cfgSubject').value,
+        bodyTemplate: document.getElementById('cfgBody').value,
+        maxThreshold: document.getElementById('cfgMax').value,
+        minThreshold: document.getElementById('cfgMin').value,
+        alertEnabled: document.getElementById('cfgEnabled').checked ? 'on' : 'off'
+      });
+      const statusEl = document.getElementById('messageSaveStatus');
+      statusEl.textContent = 'Saving…';
+      statusEl.style.color = '#888';
+      try {
+        const res  = await fetch('/messageConfig', { method: 'POST', body: params.toString(),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+        const data = await res.json();
+        applyAlertConfig(data.messageConfig);
+        statusEl.textContent = '✓ Saved';
+        statusEl.style.color = 'green';
+      } catch(e) {
+        statusEl.textContent = '✗ Error saving';
+        statusEl.style.color = 'red';
+      }
+      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    };
+
   document.getElementById('sensor1On').onclick = async () => {
     await fetch('/sensor1/on', { method: 'POST' });
     updateChart();
@@ -465,6 +607,25 @@ void TempServer::sendData(WiFiClient& client) {
     jsonResponse += ",\"emailAddress\":\"";
     jsonResponse += jsonEscape(emailAddress);
     jsonResponse += "\"";
+    auto esc = [](const String& s) -> String {
+        String out;
+        for (int i = 0; i < (int)s.length(); ++i) {
+            if (s[i] == '"')       out += "\\\"";
+            else if (s[i] == '\\') out += "\\\\";
+            else                   out += s[i];
+        }
+        return out;
+    };
+
+    json += ",\"messageConfig\":{";
+    json += "\"alertEnabled\":"   + String(messageConfig.alertEnabled ? "true" : "false");
+    json += ",\"recipient\":\""   + esc(messageConfig.recipient)     + "\"";
+    json += ",\"subject\":\""     + esc(messageConfig.subject)       + "\"";
+    json += ",\"bodyTemplate\":\"" + esc(messageConfig.bodyTemplate)  + "\"";
+    json += ",\"maxThresholdC\":" + String(messageConfig.maxThresholdC, 2);
+    json += ",\"minThresholdC\":" + String(messageConfig.minThresholdC, 2);
+    json += "}";
+
     jsonResponse += "}";
 
     client.println(jsonResponse);
