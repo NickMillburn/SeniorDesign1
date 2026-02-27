@@ -19,7 +19,7 @@ int status = WL_IDLE_STATUS;
 int lastTempUpdate = 0; // Timestamp of the last sensor update
 int lastWifiCheck = 0; // Timestamp of the last WiFi connection check
 
-TempServer server(80, sensor1Active, sensor2Active); // Create an instance of the TempServer class to manage WiFi and server functions
+TempServer server(80, sensor1Active, sensor2Active, systemPowerOn); // Create an instance of the TempServer class to manage WiFi and server functions
 
 // put function declarations here:
 // function to print WiFi status to serial monitor, including the IP address of the board, network SSID, and signal strength:
@@ -89,7 +89,7 @@ void loop() {
   float temp1 = sensors_getTempC(0);
   float temp2 = sensors_getTempC(1);
 
-  //Serial output for debugging
+  /*//Serial output for debugging
   Serial.print(" sensor1Active=");
   Serial.print(sensor1Active ? "ON" : "OFF");
   Serial.print(" sensor2Active=");
@@ -99,6 +99,7 @@ void loop() {
   Serial.print("C Temp2=");
   Serial.print(temp2);
   Serial.println("C");
+  */
 
   //write the latest sensor readings to the TempServer if it is on, otherwiseNAN
   if(millis() - lastTempUpdate > 1000) { // Update every second
@@ -113,6 +114,7 @@ void loop() {
     } else {
       server.writeSensorData(1, NAN);
     }
+    server.checkTemperatureAlerts(temp1, sensor1Active, temp2, sensor2Active);
     lastTempUpdate = millis(); // Update lastUpdated timestamp
   }
 
@@ -143,4 +145,3 @@ void printWifiStatus() {
   Serial.print("IP Address: ");
   Serial.println(ip);
 }
-
