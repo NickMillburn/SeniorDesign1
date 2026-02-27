@@ -274,7 +274,6 @@ void TempServer::sendHTML(WiFiClient& client) {
   async function updateChart() {
     const response = await fetch('/data');
     const data = await response.json();
-
     lastSensor0C = data.sensor0 || [];
     lastSensor1C = data.sensor1 || [];
     sensor1Enabled = !!data.sensor1Active;

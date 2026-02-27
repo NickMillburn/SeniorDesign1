@@ -2,7 +2,7 @@
 #include "WiFiS3.h"
 #include <math.h>
 
-constexpr const char* EMAIL_SENDER = "tpurcell@uiowa.edu";
+constexpr const char* EMAIL_SENDER = "1bashkimuseni1@gmail.com";
 constexpr const char* EMAIL_SENDER_NAME = "Tyler Purcell";
 
 #ifndef SENDGRID_API_KEY
