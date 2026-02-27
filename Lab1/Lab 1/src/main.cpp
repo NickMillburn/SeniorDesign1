@@ -111,18 +111,21 @@ void loop() {
 
     if(sensor1Active) {
       server.writeSensorData(0, temp1);
-      emailMessager.checkAndNotify(0, temp1, cfg); 
+      if (emailMessager.checkAndNotify(0, temp1, cfg)) {
+        server.recordEmailSent(0, temp1);
+      }
     } else {
       server.writeSensorData(0, NAN);
     }
 
     if(sensor2Active) {
       server.writeSensorData(1, temp2);
-      emailMessager.checkAndNotify(1, temp2, cfg); 
+      if (emailMessager.checkAndNotify(1, temp2, cfg)) {
+        server.recordEmailSent(1, temp2);
+      }
     } else {
       server.writeSensorData(1, NAN);
     }
-    server.checkTemperatureAlerts(temp1, sensor1Active, temp2, sensor2Active);
     lastTempUpdate = millis(); // Update lastUpdated timestamp
   }
 

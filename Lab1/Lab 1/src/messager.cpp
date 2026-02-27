@@ -1,42 +1,34 @@
+#include "messager.h"
 #include "WiFiS3.h"
-#include "network_credentials.h"
+#include <math.h>
 
-char ssid[] = PRIVATE_SSID;
-char pass[] = PRIVATE_PASSWORD;
+constexpr const char* EMAIL_SENDER = "tpurcell@uiowa.edu";
+constexpr const char* EMAIL_SENDER_NAME = "Tyler Purcell";
 
-const char* apiKey = "REDACTED_SENDGRID_KEY";
-const char* host = "api.sendgrid.com";
+#ifndef SENDGRID_API_KEY
+#error "SENDGRID_API_KEY is not defined. Add it to .env (see .env.example)."
+#endif
 
-#define EMAIL_SENDER      "tpurcell@uiowa.edu"
-#define EMAIL_SENDER_NAME "Tyler Purcell"
+const char* apiKey = SENDGRID_API_KEY;
 
-//Constructor
-messager::messager(){}
+messager::messager() : lastSentMs{0, 0} {}
 
-void messager::checkNotify(int sensorIndex, float tempC, const messageConfig& cfg) {
-    if (sensorIndex < 0 || sensorIndex > 1) { 
-      return; 
-    }
-    if (!cfg.alertEnabled) { 
-      return; 
-    }
-    if (isnan(tempC)) { 
-      return; 
-    }
+bool messager::checkAndNotify(int sensorIndex, float tempC, const messageConfig& cfg) {
+    if (sensorIndex < 0 || sensorIndex > 1) return false;
+    if (!cfg.alertEnabled) return false;
+    if (isnan(tempC) || tempC <= -100.0f) return false;
 
     bool reachedMax = (tempC > cfg.maxThresholdC);
-    bool reachedMin    = (tempC < cfg.minThresholdC);
+    bool reachedMin = (tempC < cfg.minThresholdC);
+    if (!reachedMax && !reachedMin) return false;
 
-    if (!reachedMax && !reachedMin) return;
+    unsigned long now = millis();
+    if (now - lastSentMs[sensorIndex] < ALERT_COOLDOWN_MS) return false;
 
-    // Build the subject — append direction hint for clarity
     String subject = cfg.subject;
     subject += reachedMax ? " [HIGH]" : " [LOW]";
 
-    // Expand {sensor} / {temp} tokens in the user's body template
-    String body = expandTemplate(cfg.bodyTemplate, sensorIndex + 1, tempC);
-
-    // Append a direction line so the email is self-explanatory
+    String body = changeTemplate(cfg.bodyTemplate, sensorIndex + 1, tempC);
     body += "\n\n";
     if (reachedMax) {
         body += "Max threshold : " + String(cfg.maxThresholdC, 1) + " deg C\n";
@@ -45,38 +37,33 @@ void messager::checkNotify(int sensorIndex, float tempC, const messageConfig& cf
     }
     body += "Current reading: " + String(tempC, 1) + " deg C";
 
-    Serial.print("[EmailNotifier] Threshold breached on sensor ");
-    Serial.print(sensorIndex + 1);
-    Serial.print(" (");
-    Serial.print(reachedMax ? "HIGH" : "LOW");
-    Serial.print("), sending to ");
-    Serial.print(cfg.recipient);
-    Serial.print(" ... ");
-
     bool ok = sendEmail(cfg.recipient, subject, body);
-    Serial.println(ok ? "sent!" : "FAILED");
+    if (ok) {
+        lastSentMs[sensorIndex] = now;
+    }
+    return ok;
 }
 
 String messager::changeTemplate(const String& tmpl, int sensorNumber, float tempC) {
     String out = tmpl;
     out.replace("{sensor}", String(sensorNumber));
-    out.replace("{temp}",   String(tempC, 1));
+    out.replace("{temp}", String(tempC, 1));
     return out;
 }
 
-void sendEmail(const String& recipient, const String& subject, const String& body)
-{
-  WiFiSSLClient client;
-  if (client.connect("api.sendgrid.com", 443)) {
+bool messager::sendEmail(const String& recipient, const String& subject, const String& body) {
+    WiFiSSLClient client;
+    if (!client.connect("api.sendgrid.com", 443)) {
+        Serial.println("Email connection failed.");
+        return false;
+    }
 
-    // Escape the body for embedding in JSON
     String escapedBody = body;
     escapedBody.replace("\\", "\\\\");
     escapedBody.replace("\"", "\\\"");
     escapedBody.replace("\n", "\\n");
     escapedBody.replace("\r", "");
 
-    // Escape subject too (user-supplied)
     String escapedSubject = subject;
     escapedSubject.replace("\\", "\\\\");
     escapedSubject.replace("\"", "\\\"");
@@ -86,10 +73,7 @@ void sendEmail(const String& recipient, const String& subject, const String& bod
           "\"personalizations\":[{"
             "\"to\":[{\"email\":\"" + recipient + "\"}]"
           "}],"
-          "\"from\":{"
-            "\"email\":\"" EMAIL_SENDER "\","
-            "\"name\":\"" EMAIL_SENDER_NAME "\""
-          "},"
+          "\"from\":{\"email\":\"" + String(EMAIL_SENDER) + "\",\"name\":\"" + String(EMAIL_SENDER_NAME) + "\"},"
           "\"subject\":\"" + escapedSubject + "\","
           "\"content\":[{"
             "\"type\":\"text/plain\","
@@ -107,11 +91,9 @@ void sendEmail(const String& recipient, const String& subject, const String& bod
     client.println();
     client.println(message);
 
-    // Wait up to 5s for a response
     unsigned long timeout = millis();
     while (client.available() == 0) {
         if (millis() - timeout > 5000) {
-            Serial.println("Response timed out.");
             client.stop();
             return false;
         }
@@ -119,14 +101,5 @@ void sendEmail(const String& recipient, const String& subject, const String& bod
 
     String statusLine = client.readStringUntil('\n');
     client.stop();
-
-    Serial.print("Email Messager Response: ");
-    Serial.println(statusLine);
-
     return statusLine.indexOf("202") >= 0;
-  }
-
- else {
-    Serial.println("Connection failed.");
-  }
 }

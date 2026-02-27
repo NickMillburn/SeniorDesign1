@@ -6,3 +6,4 @@
 include/network_credentials.h
 src/*.code-workspace
 .DS_Store
+.env

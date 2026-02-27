@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Arduino.h>
 
 // Holds all user-configurable alert settings.

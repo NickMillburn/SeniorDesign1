@@ -29,6 +29,7 @@
   <label><input type="radio" name="tempUnit" value="F"> Fahrenheit</label>
 </fieldset>
 <div id="powerStatus">Power: --</div>
+<div id="emailStatus">Email: none sent yet</div>
 <div></div>
 
 <fieldset>
@@ -158,6 +159,15 @@
     document.getElementById('sensor1Status').textContent = `Status: ${sensor1Status}`;
     document.getElementById('sensor2Status').textContent = `Status: ${sensor2Status}`;
     document.getElementById('powerStatus').textContent = `Power: ${devicePowerOn ? 'ON' : 'OFF'}`;
+    if (data.emailSentRecently) {
+      const emailSensor = (typeof data.lastEmailSensor === 'number') ? data.lastEmailSensor + 1 : '?';
+      const emailTemp = (typeof data.lastEmailTempC === 'number') ? data.lastEmailTempC.toFixed(1) : '--';
+      document.getElementById('emailStatus').textContent = `Email: sent recently (S${emailSensor}, ${emailTemp} °C)`;
+    } else if (typeof data.lastEmailAgeSec === 'number' && data.lastEmailAgeSec >= 0) {
+      document.getElementById('emailStatus').textContent = `Email: last sent ${Math.floor(data.lastEmailAgeSec)}s ago`;
+    } else {
+      document.getElementById('emailStatus').textContent = 'Email: none sent yet';
+    }
     document.getElementById('sensor1On').disabled = !devicePowerOn;
     document.getElementById('sensor1Off').disabled = !devicePowerOn;
     document.getElementById('sensor2On').disabled = !devicePowerOn;

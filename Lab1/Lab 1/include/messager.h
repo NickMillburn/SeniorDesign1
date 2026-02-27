@@ -1,16 +1,17 @@
+#pragma once
+
 #include <Arduino.h>
-#include "WiFiS3.h"
 #include "messageConfig.h"
 
-class messager{
-    public:
+class messager {
+  public:
     messager();
+    bool checkAndNotify(int sensorIndex, float tempC, const messageConfig& cfg);
 
-    void messager::checkNotify(int sensorIndex, float tempC, const messageConfig& cfg);
-
-    private:
+  private:
     bool sendEmail(const String& recipient, const String& subject, const String& body);
+    static String changeTemplate(const String& tmpl, int sensorNumber, float tempC);
 
-    // Expand {sensor} and {temp} tokens in the body template
-    static String changeTemplate(const String& tmpl, int sensorIndex, float tempC);
-}
+    static const unsigned long ALERT_COOLDOWN_MS = 300000UL; // 5 minutes
+    unsigned long lastSentMs[2];
+};

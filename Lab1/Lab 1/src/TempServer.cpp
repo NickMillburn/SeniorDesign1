@@ -2,23 +2,22 @@
 #include <ArduinoJson.h>
 #include <math.h>
 
-static bool isDisconnectedReading(float tempC) {
-    return !isnan(tempC) && tempC <= -100.0f;
-}
-
 static String jsonEscape(String value) {
     value.replace("\\", "\\\\");
     value.replace("\"", "\\\"");
     return value;
 }
 
-// Starts the server; I was getting some weird client connection issues when I had the server start in the TempServer constructor,
-// so I moved it to a separate begin() function that is called after WiFi connection is established in main.cpp
+void TempServer::recordEmailSent(int sensorIndex, float temperatureC) {
+    lastEmailSentMs = millis();
+    lastEmailSensor = sensorIndex;
+    lastEmailTempC = temperatureC;
+}
+
 void TempServer::begin() {
     server.begin();
 }
 
-// Retrieves the latest temperature readings for a given sensor ID. If the sensor ID does not exist, it returns an empty vector.
 std::vector<float> TempServer::getSensorData(int sensorId) {
     if (sensorData.find(sensorId) != sensorData.end()) {
         return sensorData[sensorId];
@@ -26,19 +25,14 @@ std::vector<float> TempServer::getSensorData(int sensorId) {
     return std::vector<float>();
 }
 
-// Writes a new temperature reading for a specified sensor ID. It maintains only the latest (MAX_READINGS)
-// readings by removing the oldest entry when the limit is exceeded.
 void TempServer::writeSensorData(int sensorId, float temp) {
     if (sensorData.find(sensorId) != sensorData.end()) {
-        // erase the oldest reading
         sensorData[sensorId].erase(sensorData[sensorId].begin());
-        // add the new reading to the highest index in the vector
         sensorData[sensorId].push_back(temp);
     }
 }
 
 bool TempServer::handleSettingsUpdate(const String& requestBody) {
-    // Parses /settings JSON and applies only provided fields.
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, requestBody);
     if (err) {
@@ -48,154 +42,87 @@ bool TempServer::handleSettingsUpdate(const String& requestBody) {
     bool updated = false;
 
     if (doc["emailAddress"].is<const char*>()) {
-        emailAddress = doc["emailAddress"].as<const char*>();
+        alertConfig.recipient = doc["emailAddress"].as<const char*>();
         updated = true;
     }
     if (doc["highTempThreshold"].is<float>() || doc["highTempThreshold"].is<int>()) {
-        highTempThreshold = doc["highTempThreshold"].as<float>();
+        alertConfig.maxThresholdC = doc["highTempThreshold"].as<float>();
         updated = true;
     }
     if (doc["lowTempThreshold"].is<float>() || doc["lowTempThreshold"].is<int>()) {
-        lowTempThreshold = doc["lowTempThreshold"].as<float>();
+        alertConfig.minThresholdC = doc["lowTempThreshold"].as<float>();
         updated = true;
     }
 
     return updated;
 }
 
-// Handles client requests by checking for available clients, reading their requests, and sending appropriate responses
-// (HTML page or JSON data) based on the request type.
 void TempServer::handleClientRequest() {
     WiFiClient client = server.available();
-    // Only process the request if a client is connected
-    if (client) {
-        String currentLine = "";
-        String requestLine = "";
-        int contentLength = 0;
-        String requestBody = "";
+    if (!client) return;
 
-        String headers      = "";
-        int    contentLength = 0;
+    String currentLine = "";
+    String requestLine = "";
+    int contentLength = 0;
+    String requestBody = "";
 
-        while (client.connected()) {
-            if (client.available()) {
-                char c = client.read();
-                if (c == '\n') {
-                    // If the current line is blank, it means we've reached the end of the HTTP request headers
-                    if (currentLine.length() == 0) {
-                        if (contentLength > 0) {
-                            unsigned long bodyStartMs = millis();
-                            while ((int)requestBody.length() < contentLength && (millis() - bodyStartMs) < 1000) {
-                                if (client.available()) {
-                                    requestBody += (char)client.read();
-                                }
-                            }
+    while (client.connected()) {
+        if (!client.available()) continue;
+
+        char c = client.read();
+        if (c == '\n') {
+            if (currentLine.length() == 0) {
+                if (contentLength > 0) {
+                    unsigned long bodyStartMs = millis();
+                    while ((int)requestBody.length() < contentLength && (millis() - bodyStartMs) < 1000) {
+                        if (client.available()) {
+                            requestBody += (char)client.read();
                         }
-
-                        // Check the request line to determine if the client is requesting the HTML page or the data endpoint
-                        if (requestLine.startsWith("GET /data ")) {
-                            sendData(client);
-                        } else if (requestLine.startsWith("POST /sensor1/on")) {
-                            sensor1Active = true;
-                            sendData(client);
-                        } else if (requestLine.startsWith("POST /sensor1/off")) {
-                            sensor1Active = false;
-                            sendData(client);
-                        } else if (requestLine.startsWith("POST /sensor2/on")) {
-                            sensor2Active = true;
-                            sendData(client);
-                        } else if (requestLine.startsWith("POST /sensor2/off")) {
-                            sensor2Active = false;
-                            sendData(client);
-                        } else if (requestLine.startsWith("POST /settings")) {
-                            if (!handleSettingsUpdate(requestBody)) {
-                                Serial.println("Warning: invalid /settings payload");
-                            }
-                            sendData(client);
-                        } else if (requestLine.startsWith("POST /messageConfig")) {
-                            handleMessageConfig(client, body);
-                          }
-                        else {
-                            sendHTML(client);
-                        }
-                        break;
                     }
-                    // Store the first line of the request (the request line) for later processing
-                    if (requestLine.length() == 0) {
-                        requestLine = currentLine;
-                    }
-                    if (currentLine.startsWith("Content-Length:")) {
-                        String value = currentLine.substring(String("Content-Length:").length());
-                        value.trim();
-                        contentLength = value.toInt();
-                    }
-                    currentLine = "";
-                    // If the line is blank, we have reached the end of the request headers, so we can break out of the loop
-                } else if (c != '\r') {
-                    currentLine += c;
                 }
+
+                if (requestLine.startsWith("GET /data ")) {
+                    sendData(client);
+                } else if (requestLine.startsWith("POST /sensor1/on")) {
+                    sensor1Active = true;
+                    sendData(client);
+                } else if (requestLine.startsWith("POST /sensor1/off")) {
+                    sensor1Active = false;
+                    sendData(client);
+                } else if (requestLine.startsWith("POST /sensor2/on")) {
+                    sensor2Active = true;
+                    sendData(client);
+                } else if (requestLine.startsWith("POST /sensor2/off")) {
+                    sensor2Active = false;
+                    sendData(client);
+                } else if (requestLine.startsWith("POST /settings")) {
+                    if (!handleSettingsUpdate(requestBody)) {
+                        Serial.println("Warning: invalid /settings payload");
+                    }
+                    sendData(client);
+                } else {
+                    sendHTML(client);
+                }
+                break;
             }
-        }
-        client.stop();
-    }
-}
 
-// Parses the form POST body and saves to messageConfig
-void TempServer::handleMessageConfig(WiFiClient& client, const String& body) {
-    String recipient    = formValue(body, "recipient");
-    String subject     = formValue(body, "subject");
-    String bodyTemplate = formValue(body, "bodyTemplate");
-    String maxStr       = formValue(body, "maxThreshold");
-    String minStr       = formValue(body, "minThreshold");
-    String enabledStr   = formValue(body, "alertEnabled");
-
-    if (recipient.length()    > 0) alertConfig.recipient     = recipient;
-    if (subject.length()      > 0) alertConfig.subject       = subject;
-    if (bodyTemplate.length() > 0) alertConfig.bodyTemplate  = bodyTemplate;
-    if (maxStr.length()       > 0) alertConfig.maxThresholdC = maxStr.toFloat();
-    if (minStr.length()       > 0) alertConfig.minThresholdC = minStr.toFloat();
-    alertConfig.alertEnabled = (enabledStr == "true" || enabledStr == "1" || enabledStr == "on");
-
-    Serial.println("Message config updated:");
-    Serial.print("  recipient=");    Serial.println(alertConfig.recipient);
-    Serial.print("  subject=");      Serial.println(alertConfig.subject);
-    Serial.print("  maxThreshold="); Serial.println(alertConfig.maxThresholdC);
-    Serial.print("  minThreshold="); Serial.println(alertConfig.minThresholdC);
-    Serial.print("  enabled=");      Serial.println(alertConfig.alertEnabled);
-
-    // Respond with updated JSON so the UI can confirm the saved values
-    sendData(client);
-  
-}
-
-// Decoding %XX and '+' in a URL-encoded string
-String TempServer::urlDecode(const String& src) {
-    String decoded = "";
-    for (int i = 0; i < (int)src.length(); ++i) {
-        if (src[i] == '+') {
-            decoded += ' ';
-        } else if (src[i] == '%' && i + 2 < (int)src.length()) {
-            char hi = src[i + 1];
-            char lo = src[i + 2];
-            auto hexVal = [](char c) -> int {
-                if (c >= '0' && c <= '9') return c - '0';
-                if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-                if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-                return 0;
-            };
-            decoded += (char)((hexVal(hi) << 4) | hexVal(lo));
-            i += 2;
-        } else {
-            decoded += src[i];
+            if (requestLine.length() == 0) {
+                requestLine = currentLine;
+            }
+            if (currentLine.startsWith("Content-Length:")) {
+                String value = currentLine.substring(String("Content-Length:").length());
+                value.trim();
+                contentLength = value.toInt();
+            }
+            currentLine = "";
+        } else if (c != '\r') {
+            currentLine += c;
         }
     }
-    return decoded;
+
+    client.stop();
 }
 
-
-// Helper function to send an HTML page with embedded JavaScript for charting the temperature data.
-// This function constructs a basic HTTP response and serves a simple webpage that uses Chart.js to
-// visualize the temperature readings from the sensors. The html is stored in client.html, and copied here
 void TempServer::sendHTML(WiFiClient& client) {
     client.println("HTTP/1.1 200 OK");
     client.println("Content-type:text/html");
@@ -233,8 +160,11 @@ void TempServer::sendHTML(WiFiClient& client) {
   <label><input type="radio" name="tempUnit" value="F"> Fahrenheit</label>
 </fieldset>
 <div id="powerStatus">Power: --</div>
+<div id="emailStatus">Email: none sent yet</div>
+<div></div>
+
 <fieldset>
-  <legend>Temperature Warnings</legend>
+  <legend>Temperature Warnings:</legend>
   <p>Email Address:</p>
   <input type="email" id="emailInput" placeholder="Enter email address">
   <p>High Temperature Threshold (C):</p>
@@ -344,6 +274,7 @@ void TempServer::sendHTML(WiFiClient& client) {
   async function updateChart() {
     const response = await fetch('/data');
     const data = await response.json();
+
     lastSensor0C = data.sensor0 || [];
     lastSensor1C = data.sensor1 || [];
     sensor1Enabled = !!data.sensor1Active;
@@ -356,10 +287,21 @@ void TempServer::sendHTML(WiFiClient& client) {
     document.getElementById('sensor1Status').textContent = `Status: ${sensor1Status}`;
     document.getElementById('sensor2Status').textContent = `Status: ${sensor2Status}`;
     document.getElementById('powerStatus').textContent = `Power: ${devicePowerOn ? 'ON' : 'OFF'}`;
+    if (data.emailSentRecently) {
+      const emailSensor = (typeof data.lastEmailSensor === 'number') ? data.lastEmailSensor + 1 : '?';
+      const emailTemp = (typeof data.lastEmailTempC === 'number') ? data.lastEmailTempC.toFixed(1) : '--';
+      document.getElementById('emailStatus').textContent = `Email: sent recently (S${emailSensor}, ${emailTemp} °C)`;
+    } else if (typeof data.lastEmailAgeSec === 'number' && data.lastEmailAgeSec >= 0) {
+      document.getElementById('emailStatus').textContent = `Email: last sent ${Math.floor(data.lastEmailAgeSec)}s ago`;
+    } else {
+      document.getElementById('emailStatus').textContent = 'Email: none sent yet';
+    }
     document.getElementById('sensor1On').disabled = !devicePowerOn;
     document.getElementById('sensor1Off').disabled = !devicePowerOn;
     document.getElementById('sensor2On').disabled = !devicePowerOn;
     document.getElementById('sensor2Off').disabled = !devicePowerOn;
+    renderChartFromRaw();
+
     if (!settingsInitialized) {
       if (typeof data.emailAddress === 'string') {
         emailAddress = data.emailAddress;
@@ -375,91 +317,7 @@ void TempServer::sendHTML(WiFiClient& client) {
       }
       settingsInitialized = true;
     }
-    renderChartFromRaw();
   }
-
-  
-  <fieldset>
-    <legend>Email Message Settings</legend>
-
-    <div class="row">
-      <label for="cfgEnabled">Messages enabled</label>
-      <input type="checkbox" id="cfgEnabled" checked>
-    </div>
-
-    <div class="row">
-      <label for="cfgRecipient">Recipient email</label>
-      <input type="email" id="cfgRecipient" size="32" placeholder="tpurcell@uiowa.edu">
-    </div>
-
-    <div class="row">
-      <label for="cfgSubject">Email subject</label>
-      <input type="text" id="cfgSubject" size="40" placeholder="Temperature Sensor Notification">
-    </div>
-
-    <div class="row" style="align-items:flex-start">
-      <label for="cfgBody" style="margin-top:4px">Email body</label>
-      <div>
-        <textarea id="cfgBody" rows="3" cols="45" placeholder="Sensor {sensor} reached {temp} deg C."></textarea>
-        <div class="hint">Use <code>{sensor}</code> for sensor number, <code>{temp}</code> for the temperature value.</div>
-      </div>
-    </div>
-
-    <div class="row">
-      <label for="cfgMax">Max threshold (°C)</label>
-      <input type="number" id="cfgMax" size="7" step="0.5" placeholder="50">
-      <span class="hint">Message when temp rises above this</span>
-    </div>
-
-    <div class="row">
-      <label for="cfgMin">Min threshold (°C)</label>
-      <input type="number" id="cfgMin" size="7" step="0.5" placeholder="10">
-      <span class="hint">Message when temp falls below this</span>
-    </div>
-
-    <div class="row">
-      <button id="messageSaveBtn">Save Settings</button>
-      <span id="messageSaveStatus"></span>
-    </div>
-  </fieldset>
-
-  // Populate message settings form from JSON response
-    function messageAlertConfig(cfg) {
-      if (!cfg) return;
-      document.getElementById('cfgEnabled').checked     = !!cfg.alertEnabled;
-      document.getElementById('cfgRecipient').value     = cfg.recipient    || '';
-      document.getElementById('cfgSubject').value       = cfg.subject      || '';
-      document.getElementById('cfgBody').value          = cfg.bodyTemplate || '';
-      document.getElementById('cfgMax').value           = cfg.maxThresholdC != null ? cfg.maxThresholdC : '';
-      document.getElementById('cfgMin').value           = cfg.minThresholdC != null ? cfg.minThresholdC : '';
-    }
-
-    // Save message settings 
-    document.getElementById('messageSaveBtn').onclick = async () => {
-      const params = new URLSearchParams({
-        recipient:    document.getElementById('cfgRecipient').value,
-        subject:      document.getElementById('cfgSubject').value,
-        bodyTemplate: document.getElementById('cfgBody').value,
-        maxThreshold: document.getElementById('cfgMax').value,
-        minThreshold: document.getElementById('cfgMin').value,
-        alertEnabled: document.getElementById('cfgEnabled').checked ? 'on' : 'off'
-      });
-      const statusEl = document.getElementById('messageSaveStatus');
-      statusEl.textContent = 'Saving…';
-      statusEl.style.color = '#888';
-      try {
-        const res  = await fetch('/messageConfig', { method: 'POST', body: params.toString(),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-        const data = await res.json();
-        applyAlertConfig(data.messageConfig);
-        statusEl.textContent = '✓ Saved';
-        statusEl.style.color = 'green';
-      } catch(e) {
-        statusEl.textContent = '✗ Error saving';
-        statusEl.style.color = 'red';
-      }
-      setTimeout(() => { statusEl.textContent = ''; }, 3000);
-    };
 
   document.getElementById('sensor1On').onclick = async () => {
     await fetch('/sensor1/on', { method: 'POST' });
@@ -551,12 +409,7 @@ void TempServer::sendHTML(WiFiClient& client) {
 )HTML");
 }
 
-// Helper function to send a JSON response containing the current sensor readings.
-// This function constructs an HTTP response with appropriate headers for JSON content
-// and sends a JSON object that includes the latest temperature readings for each sensor.
 void TempServer::sendData(WiFiClient& client) {
-    // changes the HTTP response headers to indicate that we're sending JSON data, and also
-    // includes cache control headers to prevent caching of the response so client gets most up-to-date data on each request
     client.println("HTTP/1.1 200 OK");
     client.println("Content-type:application/json");
     client.println("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
@@ -565,7 +418,6 @@ void TempServer::sendData(WiFiClient& client) {
     client.println("Connection: close");
     client.println();
 
-    // Manual serialization is faster/leaner for large, fixed-size numeric arrays.
     String jsonResponse;
     jsonResponse.reserve(7000);
     jsonResponse = "{";
@@ -601,79 +453,28 @@ void TempServer::sendData(WiFiClient& client) {
     jsonResponse += ",\"systemPowerOn\":";
     jsonResponse += (systemPowerOn ? "true" : "false");
     jsonResponse += ",\"highTempThreshold\":";
-    jsonResponse += String(highTempThreshold, 1);
+    jsonResponse += String(alertConfig.maxThresholdC, 1);
     jsonResponse += ",\"lowTempThreshold\":";
-    jsonResponse += String(lowTempThreshold, 1);
+    jsonResponse += String(alertConfig.minThresholdC, 1);
     jsonResponse += ",\"emailAddress\":\"";
-    jsonResponse += jsonEscape(emailAddress);
+    jsonResponse += jsonEscape(alertConfig.recipient);
     jsonResponse += "\"";
-    auto esc = [](const String& s) -> String {
-        String out;
-        for (int i = 0; i < (int)s.length(); ++i) {
-            if (s[i] == '"')       out += "\\\"";
-            else if (s[i] == '\\') out += "\\\\";
-            else                   out += s[i];
-        }
-        return out;
-    };
-
-    json += ",\"messageConfig\":{";
-    json += "\"alertEnabled\":"   + String(messageConfig.alertEnabled ? "true" : "false");
-    json += ",\"recipient\":\""   + esc(messageConfig.recipient)     + "\"";
-    json += ",\"subject\":\""     + esc(messageConfig.subject)       + "\"";
-    json += ",\"bodyTemplate\":\"" + esc(messageConfig.bodyTemplate)  + "\"";
-    json += ",\"maxThresholdC\":" + String(messageConfig.maxThresholdC, 2);
-    json += ",\"minThresholdC\":" + String(messageConfig.minThresholdC, 2);
-    json += "}";
-
+    bool hasSentEmail = (lastEmailSentMs > 0);
+    unsigned long emailAgeSec = hasSentEmail ? ((millis() - lastEmailSentMs) / 1000UL) : 0;
+    bool emailSentRecently = hasSentEmail && (emailAgeSec <= 15UL);
+    jsonResponse += ",\"emailSentRecently\":";
+    jsonResponse += (emailSentRecently ? "true" : "false");
+    jsonResponse += ",\"lastEmailSensor\":";
+    jsonResponse += String(lastEmailSensor);
+    jsonResponse += ",\"lastEmailTempC\":";
+    if (isnan(lastEmailTempC)) {
+        jsonResponse += "null";
+    } else {
+        jsonResponse += String(lastEmailTempC, 1);
+    }
+    jsonResponse += ",\"lastEmailAgeSec\":";
+    jsonResponse += hasSentEmail ? String(emailAgeSec) : String(-1);
     jsonResponse += "}";
 
     client.println(jsonResponse);
-}
-
-
-// Helper function to send an email alert when temperature exceeds a certain threshold.
-// This is a placeholder function and would need to be implemented with actual email sending logic using an email service or SMTP protocol.
-void TempServer::sendEmailAlert(String emailAddress, float temperature) {
-    // Placeholder for email alert functionality
-    // In a real implementation, this function would use an email sending service or SMTP protocol to send an email alert
-    Serial.print("ALERT: Temperature threshold exceeded! Sending email to ");
-    Serial.print(emailAddress);
-    Serial.print(" with temperature: ");
-    Serial.println(temperature);
-}
-
-void TempServer::checkTemperatureAlerts(float sensor0Temp, bool sensor0Enabled, float sensor1Temp, bool sensor1Enabled) {
-    if (!systemPowerOn || emailAddress.length() == 0) {
-        return;
-    }
-
-    const unsigned long now = millis();
-    if (now - lastAlertEmailMs < ALERT_COOLDOWN_MS) {
-        return;
-    }
-
-    bool outOfRange = false;
-    float triggeringTemp = NAN;
-
-    if (sensor0Enabled && !isnan(sensor0Temp) && !isDisconnectedReading(sensor0Temp)) {
-        if (sensor0Temp > highTempThreshold || sensor0Temp < lowTempThreshold) {
-            outOfRange = true;
-            triggeringTemp = sensor0Temp;
-        }
-    }
-
-    if (!outOfRange && sensor1Enabled && !isnan(sensor1Temp) && !isDisconnectedReading(sensor1Temp)) {
-        if (sensor1Temp > highTempThreshold || sensor1Temp < lowTempThreshold) {
-            outOfRange = true;
-            triggeringTemp = sensor1Temp;
-        }
-    }
-
-    if (!outOfRange) {
-        return;
-    }
-
-    sendEmailAlert(emailAddress, triggeringTemp);
-    lastAlertEmailMs = now;
 }
