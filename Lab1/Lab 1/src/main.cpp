@@ -9,6 +9,7 @@
 #include <RTC.h>
 #include <math.h>
 #include "TempServer.h"
+#include "messager.h"
 
 //getting wifi credientials from separate file for security purposes
 char ssid[] = PRIVATE_SSID; // your network SSID (name)
@@ -20,6 +21,7 @@ int lastTempUpdate = 0; // Timestamp of the last sensor update
 int lastWifiCheck = 0; // Timestamp of the last WiFi connection check
 
 TempServer server(80, sensor1Active, sensor2Active); // Create an instance of the TempServer class to manage WiFi and server functions
+messager emailMessager; // Create instance of message class to manage email messaging
 
 // put function declarations here:
 // function to print WiFi status to serial monitor, including the IP address of the board, network SSID, and signal strength:
@@ -102,14 +104,20 @@ void loop() {
 
   //write the latest sensor readings to the TempServer if it is on, otherwiseNAN
   if(millis() - lastTempUpdate > 1000) { // Update every second
+
+    //get email message config
+    const messageConfig& cfg = server.getMessageConfig();
+
     if(sensor1Active) {
       server.writeSensorData(0, temp1);
+      emailMessager.checkAndNotify(0, temp1, cfg); 
     } else {
       server.writeSensorData(0, NAN);
     }
 
     if(sensor2Active) {
       server.writeSensorData(1, temp2);
+      emailMessager.checkAndNotify(1, temp2, cfg); 
     } else {
       server.writeSensorData(1, NAN);
     }
