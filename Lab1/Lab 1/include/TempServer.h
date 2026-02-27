@@ -4,6 +4,7 @@
 #include <WiFiS3.h>
 #include <map>
 #include <vector>
+#include "messageConfig.h"
 
 class TempServer {
   public:
@@ -31,11 +32,18 @@ class TempServer {
     // Sends JSON data response with current sensor readings
     void sendData(WiFiClient& client);
 
+    const messageConfig& getmessageConfig() const { return config; }
+
     ~TempServer() = default;
 
   private:
     std::map<int, std::vector<float> > sensorData;
     WiFiServer server;
     bool& sensor1Active;
-    bool& sensor2Active;
+    bool& sensor2Active; 
+    messageConfig configl
+
+    static String urlDecode(const String& src);
+
+    static String formValue(const String& body, const String& key);
 };
