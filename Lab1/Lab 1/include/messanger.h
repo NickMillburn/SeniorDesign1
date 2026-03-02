@@ -12,6 +12,6 @@ class messager {
     bool sendEmail(const String& recipient, const String& subject, const String& body);
     static String changeTemplate(const String& tmpl, int sensorNumber, float tempC);
 
-    static const unsigned long ALERT_COOLDOWN_MS = 300000UL; // 5 minutes
+    static const unsigned long ALERT_COOLDOWN_MS = 60000UL; // 1 minute
     unsigned long lastSentMs[2];
 };

@@ -9,7 +9,7 @@
 #include <RTC.h>
 #include <math.h>
 #include "TempServer.h"
-#include "messager.h"
+#include "messanger.h"
 
 //getting wifi credientials from separate file for security purposes
 char ssid[] = PRIVATE_SSID; // your network SSID (name)

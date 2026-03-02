@@ -1,8 +1,8 @@
-#include "messager.h"
+#include "messanger.h"
 #include "WiFiS3.h"
 #include <math.h>
 
-constexpr const char* EMAIL_SENDER = "1bashkimuseni1@gmail.com";
+constexpr const char* EMAIL_SENDER = "tylerp0417@gmail.com";
 constexpr const char* EMAIL_SENDER_NAME = "Tyler Purcell";
 
 #ifndef SENDGRID_API_KEY
@@ -14,16 +14,38 @@ const char* apiKey = SENDGRID_API_KEY;
 messager::messager() : lastSentMs{0, 0} {}
 
 bool messager::checkAndNotify(int sensorIndex, float tempC, const messageConfig& cfg) {
-    if (sensorIndex < 0 || sensorIndex > 1) return false;
-    if (!cfg.alertEnabled) return false;
-    if (isnan(tempC) || tempC <= -100.0f) return false;
+    if (sensorIndex < 0 || sensorIndex > 1) {
+        Serial.println("[Email] Skip: invalid sensor index");
+        return false;
+    }
+    if (!cfg.alertEnabled) {
+        Serial.println("[Email] Skip: alerts disabled");
+        return false;
+    }
+    if (isnan(tempC) || tempC <= -100.0f) {
+        Serial.println("[Email] Skip: invalid/disconnected reading");
+        return false;
+    }
 
     bool reachedMax = (tempC > cfg.maxThresholdC);
     bool reachedMin = (tempC < cfg.minThresholdC);
-    if (!reachedMax && !reachedMin) return false;
+    if (!reachedMax && !reachedMin) {
+        Serial.print("[Email] Skip: inside range. temp=");
+        Serial.print(tempC, 1);
+        Serial.print(" range=[");
+        Serial.print(cfg.minThresholdC, 1);
+        Serial.print(", ");
+        Serial.print(cfg.maxThresholdC, 1);
+        Serial.println("]");
+        return false;
+    }
 
     unsigned long now = millis();
-    if (now - lastSentMs[sensorIndex] < ALERT_COOLDOWN_MS) return false;
+    if (now - lastSentMs[sensorIndex] < ALERT_COOLDOWN_MS) {
+        Serial.print("[Email] Skip: cooldown active for sensor ");
+        Serial.println(sensorIndex + 1);
+        return false;
+    }
 
     String subject = cfg.subject;
     subject += reachedMax ? " [HIGH]" : " [LOW]";
@@ -40,6 +62,14 @@ bool messager::checkAndNotify(int sensorIndex, float tempC, const messageConfig&
     bool ok = sendEmail(cfg.recipient, subject, body);
     if (ok) {
         lastSentMs[sensorIndex] = now;
+        Serial.print("[Email] Sent for sensor ");
+        Serial.print(sensorIndex + 1);
+        Serial.print(" at ");
+        Serial.print(tempC, 1);
+        Serial.println("C");
+    } else {
+        Serial.print("[Email] Send failed for sensor ");
+        Serial.println(sensorIndex + 1);
     }
     return ok;
 }
@@ -57,7 +87,7 @@ bool messager::sendEmail(const String& recipient, const String& subject, const S
         Serial.println("Email connection failed.");
         return false;
     }
-
+    
     String escapedBody = body;
     escapedBody.replace("\\", "\\\\");
     escapedBody.replace("\"", "\\\"");
@@ -101,5 +131,7 @@ bool messager::sendEmail(const String& recipient, const String& subject, const S
 
     String statusLine = client.readStringUntil('\n');
     client.stop();
+    Serial.print("[Email] SendGrid status: ");
+    Serial.println(statusLine);
     return statusLine.indexOf("202") >= 0;
 }
