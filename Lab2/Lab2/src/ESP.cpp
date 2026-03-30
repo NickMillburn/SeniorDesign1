@@ -89,16 +89,9 @@ void loop() {
     const int rawSample = analogRead(analogPin);
     const float centeredSample = rawSample * adcScale - adcMidpoint;
     const float filterOutput = runFilter(centeredSample);
-    const float maxMagnitude = maxRecentMagnitude();
 
     pushMagnitude(fabsf(2.0f * filterOutput));
-    bool currentlyDetecting = maxMagnitude > threshold;
-
-    if(!currentlyDetecting && previousDetecting) {
-        //TODO implement email alerts here
-        Serial.println("Stopped detecting");
-    } 
-    previousDetecting = currentlyDetecting;
+    
 
     if (micros() - sampleStartUs > samplePeriodUs) {
         missedSamples++;
@@ -110,6 +103,15 @@ void loop() {
 
     const unsigned long nowUs = micros();
     if (nowUs - g_lastReportUs >= reportPeriodUs) {
+        const float maxMagnitude = maxRecentMagnitude();
+        bool currentlyDetecting = maxMagnitude > threshold;
+
+        if(!currentlyDetecting && previousDetecting) {
+            //TODO implement email alerts here
+            Serial.println("Stopped detecting");
+        } 
+        previousDetecting = currentlyDetecting;
+
         Serial.print(currentlyDetecting ? "Detecting " : "Not detecting ");
         Serial.print("peak=");
         Serial.print(maxMagnitude, 6);
