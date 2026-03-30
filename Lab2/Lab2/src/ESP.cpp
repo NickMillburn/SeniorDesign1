@@ -1,91 +1,114 @@
 #include <Arduino.h>
+#include <math.h>
 
-// A digital frequency selective filter
-// A. Kruger, 2019
-// revised R. Mudumbai, 2020 & 2024
-// revised N. Najeeb, 2025
+namespace {
 
-int analogPin = A0;
-int LED = 12;
+constexpr uint8_t analogPin = A0;
+constexpr uint8_t ledPin = LED_BUILTIN;
+constexpr size_t numSections = 2;
+constexpr size_t historyLength = 10;
+constexpr unsigned long samplePeriodUs = 250;
+constexpr unsigned long reportPeriodUs = 1000000UL;
+constexpr float threshold = 0.2f;
+constexpr float adcMidpoint = 2.5f;
+constexpr float adcScale = 5.0f / 1023.0f;
 
-const int n = 7;
-int m = 10;
+struct SosSection {
+    float b0;
+    float b1;
+    float b2;
+    float a1;
+    float a2;
+    float d1;
+    float d2;
+};
 
-float den[] = {1.0000, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00};
-float num[] = {0.0058, 0.00, -0.015, 0.00, 0.015, 0.00, -0.0058};
+SosSection g_sections[numSections] = {
+    {1.0f, 0.0f, -1.0f, -1.4682095f, 0.93292826f, 0.0f, 0.0f},
+    {1.0f, 0.0f, -1.0f, -1.5529847f, 0.93813700f, 0.0f, 0.0f},
+};
 
-float x[n], y[n], filter_out, s[10];  // renamed yn -> filter_out
+constexpr float sectionScales[numSections] = {
+    0.045613233f,
+    0.045613233f,
+};
 
-float threshold_val = 0.2;
-int Ts = 333;
+float g_peakHistory[historyLength] = {};
+size_t g_historyIndex = 0;
+unsigned long g_lastReportUs = 0;
+unsigned long missedSamples = 0;
 
-void setup()
-{
-    Serial.begin(9600);  // bumped up from 1200, RA4M1 can handle it
-    int i;
+// Run one ADC sample through the cascaded SOS filter.
+float runFilter(float sample) {
+    float stageValue = sample;
 
-    // REMOVED: AVR-specific ADC prescaler lines, not needed on RA4M1
+    for (size_t i = 0; i < numSections; ++i) {
+        SosSection &section = g_sections[i];
+        const float scaledInput = stageValue * sectionScales[i];
+        const float output = section.b0 * scaledInput + section.d1;
 
-    pinMode(LED, OUTPUT);
+        section.d1 = section.b1 * scaledInput - section.a1 * output + section.d2;
+        section.d2 = section.b2 * scaledInput - section.a2 * output;
+        stageValue = output;
+    }
 
-    for (i = 0; i < n; i++)
-        x[i] = y[i] = 0;
-
-    for (i = 0; i < m; i++)
-        s[i] = 0;
-    filter_out = 0;
+    return stageValue;
 }
 
-void loop()
-{
-    unsigned long t1;
-    int i, count, val;
-    float changet = micros();
+// Store the latest detector magnitude in a ring buffer.
+void pushMagnitude(float magnitude) {
+    g_peakHistory[g_historyIndex] = magnitude;
+    g_historyIndex = (g_historyIndex + 1U) % historyLength;
+}
 
-    count = 0;
-    while (1) {
-        t1 = micros();
+// Return the peak magnitude seen in the recent history window.
+float maxRecentMagnitude() {
+    float maxValue = 0.0f;
 
-        for (i = n-1; i > 0; i--) {
-            x[i] = x[i-1];
-            y[i] = y[i-1];
+    for (float value : g_peakHistory) {
+        if (value > maxValue) {
+            maxValue = value;
         }
+    }
 
-        for (i = m-1; i > 0; i--)
-            s[i] = s[i-1];
+    return maxValue;
+}
 
-        val = analogRead(analogPin);
-        x[0] = val * (5.0 / 1023.0) - 2.5;
+}  // namespace
 
-        filter_out = num[0] * x[0];
+// Initialize serial output and the detector status LED.
+void setup() {
+    Serial.begin(230400);
+    pinMode(ledPin, OUTPUT);
+}
 
-        for (i = 1; i < n; i++)
-            filter_out = filter_out - den[i] * y[i] + num[i] * x[i];
+// Sample, filter, update the detector output, and hold the sample rate.
+void loop() {
+    const unsigned long sampleStartUs = micros();
+    const int rawSample = analogRead(analogPin);
+    const float centeredSample = rawSample * adcScale - adcMidpoint;
+    const float filterOutput = runFilter(centeredSample);
 
-        y[0] = filter_out;
+    pushMagnitude(fabsf(2.0f * filterOutput));
 
-        s[0] = abs(2 * filter_out);
+    const unsigned long nowUs = micros();
+    if (nowUs - g_lastReportUs >= reportPeriodUs) {
+        const float peakMagnitude = maxRecentMagnitude();
+        Serial.print(peakMagnitude > threshold ? "Detecting " : "Not detecting ");
+        Serial.print("peak=");
+        Serial.print(peakMagnitude, 6);
+        Serial.print(" missed=");
+        Serial.println(missedSamples);
+        digitalWrite(ledPin, peakMagnitude < threshold ? HIGH : LOW);
+        g_lastReportUs = nowUs;
+        missedSamples = 0;
+    }
 
-        float maxs = 0;
-        for (int i = 0; i < m; i++) {
-            if (s[i] > maxs)
-                maxs = s[i];
-        }
+    if (micros() - sampleStartUs > samplePeriodUs) {
+        missedSamples++;
+        return;
+    }
 
-        if ((micros() - changet) > 1000e3)
-        {
-            Serial.println(maxs);
-            changet = micros();
-
-            if (maxs < threshold_val)
-                digitalWrite(LED, HIGH);
-            else
-                digitalWrite(LED, LOW);
-        }
-
-        if ((micros() - t1) > Ts)
-            Serial.println("MISSED A SAMPLE");
-
-        while ((micros() - t1) < Ts);
+    while (micros() - sampleStartUs < samplePeriodUs) {
     }
 }
