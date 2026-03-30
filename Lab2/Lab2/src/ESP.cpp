@@ -12,6 +12,7 @@ constexpr unsigned long reportPeriodUs = 1000000UL;
 constexpr float threshold = 0.2f;
 constexpr float adcMidpoint = 2.5f;
 constexpr float adcScale = 5.0f / 1023.0f;
+bool previousDetecting = false;
 
 struct SosSection {
     float b0;
@@ -88,21 +89,16 @@ void loop() {
     const int rawSample = analogRead(analogPin);
     const float centeredSample = rawSample * adcScale - adcMidpoint;
     const float filterOutput = runFilter(centeredSample);
+    const float maxMagnitude = maxRecentMagnitude();
 
     pushMagnitude(fabsf(2.0f * filterOutput));
+    bool currentlyDetecting = maxMagnitude > threshold;
 
-    const unsigned long nowUs = micros();
-    if (nowUs - g_lastReportUs >= reportPeriodUs) {
-        const float peakMagnitude = maxRecentMagnitude();
-        Serial.print(peakMagnitude > threshold ? "Detecting " : "Not detecting ");
-        Serial.print("peak=");
-        Serial.print(peakMagnitude, 6);
-        Serial.print(" missed=");
-        Serial.println(missedSamples);
-        digitalWrite(ledPin, peakMagnitude < threshold ? HIGH : LOW);
-        g_lastReportUs = nowUs;
-        missedSamples = 0;
-    }
+    if(!currentlyDetecting && previousDetecting) {
+        //TODO implement email alerts here
+        Serial.println("Stopped detecting");
+    } 
+    previousDetecting = currentlyDetecting;
 
     if (micros() - sampleStartUs > samplePeriodUs) {
         missedSamples++;
@@ -110,5 +106,17 @@ void loop() {
     }
 
     while (micros() - sampleStartUs < samplePeriodUs) {
+    }
+
+    const unsigned long nowUs = micros();
+    if (nowUs - g_lastReportUs >= reportPeriodUs) {
+        Serial.print(currentlyDetecting ? "Detecting " : "Not detecting ");
+        Serial.print("peak=");
+        Serial.print(maxMagnitude, 6);
+        Serial.print(" missed=");
+        Serial.println(missedSamples);
+        digitalWrite(ledPin, currentlyDetecting ? HIGH : LOW);
+        g_lastReportUs = nowUs;
+        missedSamples = 0;
     }
 }
