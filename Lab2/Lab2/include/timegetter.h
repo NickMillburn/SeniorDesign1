@@ -4,7 +4,7 @@
 
 #define NTP_SERVER      "pool.ntp.org"
 #define NTP_PORT        123
-#define UTC_OFFSET_SEC  -21600   // CST time
+#define UTC_OFFSET_SEC  -18000   // CST time
 
 class timegetter {
 public:
