@@ -1,5 +1,9 @@
 #include <Arduino.h>
 #include <math.h>
+#include "WiFiS3.h"
+#include <RTC.h>
+#include "messenger.h"
+#include "timegetter.h"
 
 namespace {
 
@@ -39,6 +43,12 @@ size_t g_historyIndex = 0;
 unsigned long g_lastReportUs = 0;
 unsigned long missedSamples = 0;
 
+// NTP re-sync every hour to prevent RTC drift
+constexpr unsigned long NTP_RESYNC_INTERVAL_MS = 3600000UL;
+unsigned long lastNTPSyncMs = 0;
+
+// LAST TO-DO: Define PRIVATE_SSID & PRIVATE_PASSWORD in seperate file for WiFI Connection
+
 // Run one ADC sample through the cascaded SOS filter.
 float runFilter(float sample) {
     float stageValue = sample;
@@ -77,14 +87,44 @@ float maxRecentMagnitude() {
 
 }  // namespace
 
+messenger Messenger;
+
 // Initialize serial output and the detector status LED.
 void setup() {
     Serial.begin(230400);
     pinMode(ledPin, OUTPUT);
+
+    if (WiFi.status() == WL_NO_MODULE) {
+        Serial.println("WiFi module not found — halting.");
+        while (true);
+    }
+
+    int wifiStatus = WL_IDLE_STATUS;
+    while (wifiStatus != WL_CONNECTED) {
+        Serial.print("Connecting to SSID: ");
+        Serial.println(PRIVATE_SSID);
+        wifiStatus = WiFi.begin(PRIVATE_SSID, PRIVATE_PASSWORD);
+        delay(5000);
+    }
+    Serial.print("WiFi connected. IP: ");
+    Serial.println(WiFi.localIP());
+
+    RTC.begin();
+    if (!timegetter::syncRTC()) {
+        Serial.println("Warning: NTP sync failed. Timestamps may be inaccurate.");
+    }
+    lastNTPSyncMs = millis();
 }
 
 // Sample, filter, update the detector output, and hold the sample rate.
 void loop() {
+
+    // RTC re-sync
+    if (millis() - lastNTPSyncMs > NTP_RESYNC_INTERVAL_MS) {
+        timegetter::syncRTC();
+        lastNTPSyncMs = millis();
+    }
+
     const unsigned long sampleStartUs = micros();
     const int rawSample = analogRead(analogPin);
     const float centeredSample = rawSample * adcScale - adcMidpoint;
@@ -92,7 +132,6 @@ void loop() {
 
     pushMagnitude(fabsf(2.0f * filterOutput));
     
-
     if (micros() - sampleStartUs > samplePeriodUs) {
         missedSamples++;
         return;
@@ -109,6 +148,11 @@ void loop() {
         if(!currentlyDetecting && previousDetecting) {
             //TODO implement email alerts here
             Serial.println("Stopped detecting");
+
+            RTCTime currentTime;
+            RTC.getTime(currentTime);
+
+            Messenger.sendMessage(currentTime.getHour(), currentTime.getMinutes(), Month2int(currentTime.getMonth()), currentTime.getDayOfMonth(), currentTime.getYear() );
         } 
         previousDetecting = currentlyDetecting;
 
