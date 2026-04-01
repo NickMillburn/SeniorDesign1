@@ -1,10 +1,7 @@
 #include "messenger.h"
+#include ".env"
 #include "WiFiS3.h"
 #include <math.h>
-
-#define EMAIL_SENDER      "tylerp0417@gmail.com"
-#define EMAIL_SENDER_NAME "Tyler Purcell"
-#define SENDGRID_API_KEY "SG.XXXXXXXXXX" // LAST TO-DO: Define in seperate file for security
 
 static const char SENDGRID_HOST[] = "api.sendgrid.com";
 static const int  SENDGRID_PORT   = 443;

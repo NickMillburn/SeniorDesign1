@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <math.h>
+#include ".env"
 #include "WiFiS3.h"
 #include <RTC.h>
 #include "messenger.h"
